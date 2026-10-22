@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Fixed</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+
+.header { position: sticky; top: 0; z-index: 10; background: #2c3e50; color: #fff; padding: 0 20px; }
+.layout { display: flex; flex: 1; }
+.sidebar { flex: 0 0 220px; background: #34495e; color: #fff; padding: 20px; }
+.content { flex: 1; min-width: 0; padding: 20px; border: 5px solid #ddd; background: #fafafa; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.box { padding: 15px; min-height: 100px; background: #1abc9c; color: #fff; border-radius: 6px; }
+.footer { background: #2c3e50; color: #fff; padding: 15px; text-align: center; }
+
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+  .sidebar { flex-basis: auto; display: flex; gap: 15px; flex-wrap: wrap; }
+  .sidebar p { margin: 0; }
+}
+</style>
+</head>
+<body>
+<div class="header"><h2>Admin Dashboard</h2></div>
+<div class="layout">
+  <div class="sidebar"><p>Dashboard</p><p>Orders</p><p>Customers</p><p>Reports</p></div>
+  <div class="content">
+    <h3>Overview</h3>
+    <div class="cards">
+      <div class="box">Total Sales: ₹1,20,000</div>
+      <div class="box">Orders: 340</div>
+      <div class="box">Customers: 210</div>
+      <div class="box">Returns: 12</div>
+    </div>
+  </div>
+</div>
+<div class="footer">© 2026 Dashboard</div>
+</body>
+</html>
