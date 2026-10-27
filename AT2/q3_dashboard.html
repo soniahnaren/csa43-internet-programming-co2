@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q3 - Dashboard Layout (CSS Grid + Flexbox)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #e5e7eb; }
+  /* CSS Grid: 2-D page structure */
+  .dashboard { display: grid; min-height: 100vh; gap: 12px; padding: 12px;
+               grid-template-columns: 200px 1fr;
+               grid-template-rows: 60px 1fr 50px;
+               grid-template-areas: "header header"
+                                    "sidebar main"
+                                    "footer  footer"; }
+  .header  { grid-area: header;  background: #1e3a8a; color: #fff; padding: 0 20px;
+             display: flex; align-items: center; justify-content: space-between; } /* Flexbox: 1-D alignment */
+  .sidebar { grid-area: sidebar; background: #fff; padding: 15px; }
+  .sidebar li { list-style: none; padding: 10px 0; border-bottom: 1px solid #ddd; }
+  .main    { grid-area: main; display: grid; gap: 12px;
+             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); align-content: start; }
+  .card    { background: #fff; padding: 20px; border-radius: 8px; text-align: center; }
+  .card b  { display: block; font-size: 26px; color: #1e3a8a; margin-top: 6px; }
+  .wide    { grid-column: 1 / -1; height: 140px; }
+  .footer  { grid-area: footer; background: #1f2937; color: #fff; display: flex;
+             align-items: center; justify-content: center; }
+  @media (max-width: 700px) {
+    .dashboard { grid-template-columns: 1fr; grid-template-rows: auto;
+                 grid-template-areas: "header" "sidebar" "main" "footer"; }
+  }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <header class="header"><h3>Admin Dashboard</h3><span>Welcome, Admin</span></header>
+  <aside class="sidebar"><ul><li>Overview</li><li>Orders</li><li>Customers</li><li>Reports</li><li>Settings</li></ul></aside>
+  <main class="main">
+    <div class="card">Users<b>1,250</b></div>
+    <div class="card">Orders<b>340</b></div>
+    <div class="card">Revenue<b>Rs. 85K</b></div>
+    <div class="card">Visitors<b>5,420</b></div>
+    <div class="card wide">Sales Chart Area</div>
+  </main>
+  <footer class="footer">&copy; 2026 Dashboard</footer>
+</div>
+</body>
+</html>

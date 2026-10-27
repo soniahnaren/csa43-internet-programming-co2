@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q5 - Dynamic Menu using JavaScript Events</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; }
+  .bar { background: #312e81; color: #fff; padding: 12px 20px; display: flex; gap: 20px; align-items: center; }
+  .item { position: relative; }
+  .item > button { background: none; border: none; color: #fff; font-size: 16px; cursor: pointer; padding: 8px 12px; }
+  .item > button:hover, .item > button:focus { background: #4338ca; outline: none; }
+  .dropdown { display: none; position: absolute; top: 100%; left: 0; min-width: 170px;
+              background: #fff; box-shadow: 0 6px 14px rgba(0,0,0,0.25); z-index: 5; }
+  .dropdown a { display: block; padding: 10px 14px; color: #111; text-decoration: none; }
+  .dropdown a:hover { background: #e0e7ff; }
+  .item.open .dropdown { display: block; }
+  #msg { padding: 20px; font-size: 18px; }
+</style>
+</head>
+<body>
+<nav class="bar" id="menu">
+  <strong>MyApp</strong>
+  <div class="item"><button aria-expanded="false">Products &#9662;</button>
+    <div class="dropdown"><a href="#">Laptops</a><a href="#">Phones</a><a href="#">Tablets</a></div></div>
+  <div class="item"><button aria-expanded="false">Services &#9662;</button>
+    <div class="dropdown"><a href="#">Repair</a><a href="#">Support</a></div></div>
+  <div class="item"><button aria-expanded="false">Account &#9662;</button>
+    <div class="dropdown"><a href="#">Profile</a><a href="#">Logout</a></div></div>
+</nav>
+<p id="msg">Click a menu button, hover over it, or press Esc.</p>
+
+<script>
+  const menu = document.getElementById('menu');
+  const items = document.querySelectorAll('.item');
+  const msg = document.getElementById('msg');
+
+  function closeAll() {
+    items.forEach(i => { i.classList.remove('open', 'pinned'); i.querySelector('button').setAttribute('aria-expanded', 'false'); });
+  }
+  function toggle(item) {
+    const wasPinned = item.classList.contains('pinned');
+    closeAll();                                           // only one dropdown open at a time
+    if (!wasPinned) { item.classList.add('open', 'pinned'); item.querySelector('button').setAttribute('aria-expanded', 'true'); }
+  }
+
+  // CLICK event (event delegation: one listener on the parent menu)
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (btn) { toggle(btn.parentElement); msg.textContent = 'Clicked: ' + btn.textContent.trim(); }
+    const link = e.target.closest('.dropdown a');
+    if (link) { e.preventDefault(); msg.textContent = 'You selected: ' + link.textContent; closeAll(); }
+  });
+
+  // HOVER events (only on devices that support hover)
+  if (window.matchMedia('(hover: hover)').matches) {
+    items.forEach(item => {
+      item.addEventListener('mouseenter', () => { closeAll(); item.classList.add('open'); });   // hover opens, click pins
+      item.addEventListener('mouseleave', () => { if (!item.classList.contains('pinned')) item.classList.remove('open'); });
+    });
+  }
+
+  // KEYDOWN event: Esc closes menu
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+
+  // Click outside closes menu
+  document.addEventListener('click', e => { if (!menu.contains(e.target)) closeAll(); });
+</script>
+</body>
+</html>
