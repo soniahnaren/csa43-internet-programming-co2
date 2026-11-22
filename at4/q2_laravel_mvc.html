@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 4 - Q2: Course feedback with Laravel (MVC)</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 4</span></div>
+<div class="q"><strong>Question 2.</strong> A college is rebuilding its course-feedback system, currently written in plain PHP with HTML, SQL and validation mixed in the same files, using the Laravel or Symfony framework. Students submit ratings and comments for each course, and the department reviews summary reports. Analyse how the MVC architecture of the framework enhances the application by explaining routing, controllers, models and the ORM (Eloquent or Doctrine), migrations, templates (Blade or Twig), request validation, middleware and CSRF protection. Describe how the database connection is configured (environment file, drivers, credentials) and trace the flow of a request for submitting feedback from the route to the database and back to the view. Discuss the benefits and drawbacks of using a framework compared with plain PHP, and the factors for choosing between Laravel and Symfony.<div class="meta">Marks (10) &nbsp; (CO4) &nbsp; (BL4)</div></div>
+<h1>ANSWER 2 – Course-feedback system rebuilt with Laravel (MVC)</h1>
+<p><strong>Why MVC helps.</strong> In the old plain-PHP files, HTML, SQL and validation are mixed, so one change can break another part, the same query is copied into several pages, and security checks are easy to forget. Laravel separates the application into Model (data and rules), View (presentation) and Controller (request handling), and supplies routing, validation, CSRF protection and database access as tested building blocks.</p>
+<div class="tw"><table><thead><tr><th>MVC part</th><th>Responsibility</th><th>In the feedback system</th></tr></thead><tbody>
+<tr><td>Model</td><td>Tables, relationships and data rules; talks to the database through the ORM</td><td><code>Course</code>, <code>Feedback</code> (Eloquent); <code>Course hasMany Feedback</code></td></tr>
+<tr><td>View</td><td>Only presentation; no SQL</td><td>Blade files <code>feedback/create.blade.php</code>, <code>feedback/report.blade.php</code></td></tr>
+<tr><td>Controller</td><td>Receives the request, calls models, chooses the view</td><td><code>FeedbackController</code> (<code>create</code>, <code>store</code>, <code>report</code>)</td></tr>
+<tr><td>Router / middleware</td><td>Maps URLs to controllers; filters requests before they arrive</td><td><code>routes/web.php</code>; <code>auth</code>, <code>dept</code>, CSRF</td></tr>
+</tbody></table></div>
+<h2>A. The components and how they enhance the application</h2>
+<div class="tw"><table><thead><tr><th>Component</th><th>What it does</th><th>Benefit over plain PHP</th></tr></thead><tbody>
+<tr><td>Routing</td><td><code>routes/web.php</code> maps method + URL to a controller action, e.g. <code>Route::post(&#x27;/feedback&#x27;, [FeedbackController::class,&#x27;store&#x27;])-&gt;name(&#x27;feedback.store&#x27;)</code></td><td>One place lists every URL; clean URLs; named routes (<code>route(&#x27;feedback.store&#x27;)</code>) never break when a path changes</td></tr>
+<tr><td>Controller</td><td>Thin class: gets validated data, calls the model, returns a view or redirect</td><td>No HTML or SQL inside; easy to test and reuse</td></tr>
+<tr><td>Model + ORM (Eloquent)</td><td>Each table is a class; rows are objects. <code>Feedback::updateOrCreate()</code>, <code>Course::withAvg(&#x27;feedbacks&#x27;,&#x27;rating&#x27;)</code></td><td>Queries are built with bound parameters (protects against SQL injection); relationships and aggregates in one line; <code>$fillable</code> blocks mass-assignment</td></tr>
+<tr><td>Migrations</td><td>PHP files that create/alter tables (<code>php artisan migrate</code>, <code>migrate:rollback</code>)</td><td>Database structure is versioned in Git and identical on every machine</td></tr>
+<tr><td>Templates (Blade)</td><td><code>@extends</code>, <code>@section</code>, <code>@foreach</code>, <code>@error</code>; <code>{{ $x }}</code> escapes output automatically</td><td>Reusable layout; XSS protection by default; logic kept out of HTML</td></tr>
+<tr><td>Request validation</td><td><code>StoreFeedbackRequest::rules()</code> (<code>required</code>, <code>between:1,5</code>, <code>exists:courses,id</code>, <code>max:1000</code>)</td><td>Rules in one class; invalid input is redirected back with errors and old input</td></tr>
+<tr><td>Middleware</td><td><code>auth</code> (login required), custom <code>dept</code> (staff only), session, CSRF</td><td>Cross-cutting checks run before the controller; cannot be forgotten on a page</td></tr>
+<tr><td>CSRF protection</td><td><code>@csrf</code> adds a hidden token that the CSRF middleware of the framework checks on every POST</td><td>Blocks forged requests from other sites; a missing/wrong token returns HTTP 419</td></tr>
+</tbody></table></div>
+<h2>B. Database connection configuration</h2>
+<p>Laravel reads connection settings from the <strong>`.env`</strong> file in the project root. <code>config/database.php</code> uses <code>env(&#x27;DB_HOST&#x27;)</code> and similar calls, and <code>DB_CONNECTION</code> chooses the driver (<code>mysql</code>, <code>mariadb</code>, <code>pgsql</code>, <code>sqlite</code>, <code>sqlsrv</code>). Credentials stay out of the code base: <code>.env</code> is listed in <code>.gitignore</code>, each server has its own file, and <code>.env.example</code> documents the keys. In production <code>php artisan config:cache</code> caches the configuration for speed, and the application should use a database account with only the rights it needs. <code>APP_DEBUG</code> must be <code>false</code> in production so that errors do not reveal settings.</p>
+<figure><div class="label">.env</div><pre><code>APP_NAME=&quot;Course Feedback&quot;
+APP_ENV=local
+APP_KEY=                 # generated by: php artisan key:generate
+APP_DEBUG=true           # MUST be false in production
+
+DB_CONNECTION=mysql      # driver: mysql | mariadb | pgsql | sqlite | sqlsrv
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=course_feedback
+DB_USERNAME=feedback_app
+DB_PASSWORD=secret       # never commit the real .env file</code></pre></figure>
+<h2>C. Application code</h2>
+<figure><div class="label">routes/web.php</div><pre><code>&lt;?php
+
+use App\Http\Controllers\FeedbackController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(&#x27;auth&#x27;)-&gt;group(function () {                       // students must be logged in
+    Route::get(&#x27;/feedback/create&#x27;, [FeedbackController::class, &#x27;create&#x27;])-&gt;name(&#x27;feedback.create&#x27;);
+    Route::post(&#x27;/feedback&#x27;,       [FeedbackController::class, &#x27;store&#x27;])-&gt;name(&#x27;feedback.store&#x27;);
+    // &#x27;web&#x27; middleware group (applied automatically) = sessions + CSRF verification
+});
+
+Route::middleware([&#x27;auth&#x27;, &#x27;dept&#x27;])-&gt;group(function () {             // &#x27;dept&#x27; = our custom middleware
+    Route::get(&#x27;/reports/feedback&#x27;, [FeedbackController::class, &#x27;report&#x27;])-&gt;name(&#x27;feedback.report&#x27;);
+});</code></pre></figure>
+<figure><div class="label">Migration (feedbacks table; the courses migration is similar)</div><pre><code>Schema::create(&#x27;feedbacks&#x27;, function (Blueprint $table) {
+            $table-&gt;id();
+            $table-&gt;foreignId(&#x27;user_id&#x27;)-&gt;constrained()-&gt;cascadeOnDelete();
+            $table-&gt;foreignId(&#x27;course_id&#x27;)-&gt;constrained()-&gt;cascadeOnDelete();
+            $table-&gt;unsignedTinyInteger(&#x27;rating&#x27;);          // 1..5 (validated in the Form Request)
+            $table-&gt;text(&#x27;comment&#x27;)-&gt;nullable();
+            $table-&gt;timestamps();
+            $table-&gt;unique([&#x27;user_id&#x27;, &#x27;course_id&#x27;]);        // one feedback per student per course
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists(&#x27;feedbacks&#x27;);
+    }
+};</code></pre></figure>
+<figure><div class="label">app/Models/Feedback.php</div><pre><code>class Feedback extends Model
+{
+    protected $table = &#x27;feedbacks&#x27;;
+
+    // Mass-assignment protection: only these columns may be filled from arrays
+    protected $fillable = [&#x27;user_id&#x27;, &#x27;course_id&#x27;, &#x27;rating&#x27;, &#x27;comment&#x27;];
+
+    protected $casts = [&#x27;rating&#x27; =&gt; &#x27;integer&#x27;];
+
+    public function course(): BelongsTo
+    {
+        return $this-&gt;belongsTo(Course::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this-&gt;belongsTo(User::class);
+    }
+}</code></pre></figure>
+<figure><div class="label">app/Http/Requests/StoreFeedbackRequest.php</div><pre><code>class StoreFeedbackRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this-&gt;user() !== null;                    // only logged-in students
+    }
+
+    public function rules(): array
+    {
+        return [
+            &#x27;course_id&#x27; =&gt; [&#x27;required&#x27;, &#x27;integer&#x27;, &#x27;exists:courses,id&#x27;],
+            &#x27;rating&#x27;    =&gt; [&#x27;required&#x27;, &#x27;integer&#x27;, &#x27;between:1,5&#x27;],
+            &#x27;comment&#x27;   =&gt; [&#x27;nullable&#x27;, &#x27;string&#x27;, &#x27;max:1000&#x27;],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            &#x27;rating.between&#x27; =&gt; &#x27;Please choose a rating from 1 to 5.&#x27;,
+            &#x27;course_id.exists&#x27; =&gt; &#x27;The selected course does not exist.&#x27;,
+        ];
+    }
+}</code></pre></figure>
+<figure><div class="label">app/Http/Controllers/FeedbackController.php</div><pre><code>class FeedbackController extends Controller
+{
+    /** GET /feedback/create - show the form */
+    public function create(): View
+    {
+        return view(&#x27;feedback.create&#x27;, [
+            &#x27;courses&#x27; =&gt; Course::orderBy(&#x27;code&#x27;)-&gt;get(),
+        ]);
+    }
+
+    /** POST /feedback - validation already done by StoreFeedbackRequest */
+    public function store(StoreFeedbackRequest $request): RedirectResponse
+    {
+        $data = $request-&gt;validated();                         // only the validated keys
+
+        Feedback::updateOrCreate(                              // INSERT, or UPDATE if already rated
+            [&#x27;user_id&#x27; =&gt; $request-&gt;user()-&gt;id, &#x27;course_id&#x27; =&gt; $data[&#x27;course_id&#x27;]],
+            [&#x27;rating&#x27;  =&gt; $data[&#x27;rating&#x27;], &#x27;comment&#x27; =&gt; $data[&#x27;comment&#x27;] ?? null]
+        );
+
+        return redirect()-&gt;route(&#x27;feedback.create&#x27;)
+                         -&gt;with(&#x27;status&#x27;, &#x27;Thank you! Your feedback was saved.&#x27;);   // flash message
+    }
+
+    /** GET /reports/feedback - summary for the department */
+    public function report(): View
+    {
+        $courses = Course::withCount(&#x27;feedbacks&#x27;)              // adds feedbacks_count
+                         -&gt;withAvg(&#x27;feedbacks&#x27;, &#x27;rating&#x27;)      // adds feedbacks_avg_rating
+                         -&gt;orderByDesc(&#x27;feedbacks_avg_rating&#x27;)
+                         -&gt;get();
+
+        return view(&#x27;feedback.report&#x27;, compact(&#x27;courses&#x27;));
+    }
+}</code></pre></figure>
+<figure><div class="label">app/Http/Middleware/EnsureDepartmentStaff.php</div><pre><code>class EnsureDepartmentStaff
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        if (! $request-&gt;user() || ! $request-&gt;user()-&gt;is_staff) {   // &#x27;is_staff&#x27; boolean column on users
+            abort(403, &#x27;Department staff only.&#x27;);
+        }
+        return $next($request);                                      // continue to the controller
+    }
+}</code></pre></figure>
+<figure><div class="label">resources/views/feedback/create.blade.php</div><pre><code>@extends(&#x27;layouts.app&#x27;)
+@section(&#x27;title&#x27;, &#x27;Submit feedback&#x27;)
+
+@section(&#x27;content&#x27;)
+&lt;h2&gt;Course feedback&lt;/h2&gt;
+
+@if (session(&#x27;status&#x27;))
+    &lt;p class=&quot;ok&quot;&gt;{{ session(&#x27;status&#x27;) }}&lt;/p&gt;
+@endif
+
+&lt;form method=&quot;POST&quot; action=&quot;{{ route(&#x27;feedback.store&#x27;) }}&quot;&gt;
+    @csrf                                     {{-- hidden _token field: blocks cross-site form posts --}}
+
+    &lt;label for=&quot;course_id&quot;&gt;Course&lt;/label&gt;
+    &lt;select id=&quot;course_id&quot; name=&quot;course_id&quot;&gt;
+        &lt;option value=&quot;&quot;&gt;-- choose --&lt;/option&gt;
+        @foreach ($courses as $course)
+            &lt;option value=&quot;{{ $course-&gt;id }}&quot; @selected(old(&#x27;course_id&#x27;) == $course-&gt;id)&gt;
+                {{ $course-&gt;code }} - {{ $course-&gt;title }}   {{-- {{ }} auto-escapes (htmlspecialchars) --}}
+            &lt;/option&gt;
+        @endforeach
+    &lt;/select&gt;
+    @error(&#x27;course_id&#x27;) &lt;div class=&quot;err&quot;&gt;{{ $message }}&lt;/div&gt; @enderror
+
+    &lt;label for=&quot;rating&quot;&gt;Rating (1-5)&lt;/label&gt;
+    &lt;select id=&quot;rating&quot; name=&quot;rating&quot;&gt;
+        @for ($i = 5; $i &gt;= 1; $i--)
+            &lt;option value=&quot;{{ $i }}&quot; @selected(old(&#x27;rating&#x27;) == $i)&gt;{{ $i }}&lt;/option&gt;
+        @endfor
+    &lt;/select&gt;
+    @error(&#x27;rating&#x27;) &lt;div class=&quot;err&quot;&gt;{{ $message }}&lt;/div&gt; @enderror
+
+    &lt;label for=&quot;comment&quot;&gt;Comments&lt;/label&gt;
+    &lt;textarea id=&quot;comment&quot; name=&quot;comment&quot; rows=&quot;4&quot;&gt;{{ old(&#x27;comment&#x27;) }}&lt;/textarea&gt;
+    @error(&#x27;comment&#x27;) &lt;div class=&quot;err&quot;&gt;{{ $message }}&lt;/div&gt; @enderror
+
+    &lt;p&gt;&lt;button type=&quot;submit&quot;&gt;Submit&lt;/button&gt;&lt;/p&gt;
+&lt;/form&gt;
+@endsection</code></pre></figure>
+<h2>D. Request flow: submitting feedback (route -&gt; database -&gt; view)</h2>
+<ol>
+<li><strong>Browser:</strong> the logged-in student opens <code>/feedback/create</code>; <code>FeedbackController@create</code> loads courses with <code>Course::orderBy(&#x27;code&#x27;)-&gt;get()</code> and returns the Blade view (the form contains a hidden CSRF token).</li>
+<li><strong>Submit:</strong> the browser sends <code>POST /feedback</code> with <code>_token</code>, <code>course_id</code>, <code>rating</code> and <code>comment</code>.</li>
+<li><strong>Front controller:</strong> <code>public/index.php</code> boots Laravel and creates the request object.</li>
+<li><strong>Middleware:</strong> session start, CSRF verification middleware (wrong token -&gt; 419), <code>auth</code> (not logged in -&gt; redirect to login).</li>
+<li><strong>Routing:</strong> <code>routes/web.php</code> matches <code>POST /feedback</code> and selects <code>FeedbackController@store</code>.</li>
+<li><strong>Form Request validation:</strong> <code>StoreFeedbackRequest</code> checks the rules. On failure Laravel redirects back with the error messages and <code>old()</code> input; the controller is never called.</li>
+<li><strong>Controller:</strong> <code>$request-&gt;validated()</code> returns only the checked fields; <code>Feedback::updateOrCreate(...)</code> is called.</li>
+<li><strong>Model / ORM / database:</strong> Eloquent generates a parameterised <code>INSERT</code> (or <code>UPDATE</code> if the student already rated that course, thanks to the unique <code>(user_id, course_id)</code> key) and runs it through the connection from <code>.env</code>.</li>
+<li><strong>Response:</strong> the controller returns <code>redirect()-&gt;route(&#x27;feedback.create&#x27;)-&gt;with(&#x27;status&#x27;, ...)</code> (Post/Redirect/Get, so refreshing does not resubmit the form).</li>
+<li><strong>View:</strong> the browser follows the redirect with a GET; Blade shows the flash message from <code>session(&#x27;status&#x27;)</code>.</li>
+<li><strong>Reports:</strong> department staff open <code>/reports/feedback</code>; the <code>dept</code> middleware allows them; <code>report()</code> runs <code>withCount</code> and <code>withAvg</code> (one SQL query with aggregates) and <code>report.blade.php</code> prints the table.</li>
+</ol>
+<h2>E. Framework versus plain PHP</h2>
+<div class="tw"><table><thead><tr><th>Benefits of a framework</th><th>Drawbacks of a framework</th></tr></thead><tbody>
+<tr><td>Clear structure (MVC); code is easy to maintain and share in a team</td><td>Learning curve: routing, ORM, container, artisan/console, conventions</td></tr>
+<tr><td>Security built in: CSRF, escaped templates, parameterised queries, password hashing</td><td>Extra overhead: slower than hand-written minimal PHP for a tiny page; larger memory use</td></tr>
+<tr><td>Faster development: validation, authentication, migrations, pagination, queues, testing tools</td><td>Dependency on the framework and its upgrades; major versions need migration work</td></tr>
+<tr><td>Database changes are versioned (migrations) and repeatable</td><td>More hosting requirements (Composer, PHP version, writable storage, document root <code>public/</code>)</td></tr>
+<tr><td>Large community, packages and documentation</td><td>Easy to over-use the ORM (N+1 queries) or &quot;magic&quot; that hides what SQL is run</td></tr>
+<tr><td>Automated tests are simple to write</td><td>Overkill for a very small, one-page application</td></tr>
+</tbody></table></div>
+<h2>F. Choosing between Laravel and Symfony</h2>
+<div class="tw"><table><thead><tr><th>Factor</th><th>Laravel</th><th>Symfony</th></tr></thead><tbody>
+<tr><td>Learning curve and speed</td><td>Gentler; strong conventions and generators give very fast results</td><td>Steeper; more explicit configuration, but very flexible</td></tr>
+<tr><td>ORM</td><td>Eloquent (Active Record): simple, fast to write</td><td>Doctrine (Data Mapper): entities separate from persistence; better for complex domain models</td></tr>
+<tr><td>Templates</td><td>Blade</td><td>Twig (sandboxed, strict, widely used outside Symfony)</td></tr>
+<tr><td>Architecture style</td><td>Opinionated &quot;batteries included&quot;</td><td>Reusable decoupled components (many other projects, including Laravel, use them); suited to large, long-lived systems</td></tr>
+<tr><td>Ecosystem</td><td>Breeze/Jetstream, Livewire, queues, scheduler, hosting tools</td><td>Bundles, API Platform, Messenger; strong in enterprise integration</td></tr>
+<tr><td>Maintenance</td><td>Frequent releases; upgrades should be planned each year</td><td>Long-term-support releases suit organisations that upgrade rarely</td></tr>
+<tr><td>Team skills and hiring</td><td>Large community of PHP developers</td><td>Common in enterprise teams; developers often more experienced in design patterns</td></tr>
+</tbody></table></div>
+<p><strong>Recommendation.</strong> For a college feedback system (forms, ratings, summary reports, a small team and a short delivery time) Laravel is the better fit: login via Breeze, Eloquent aggregates for the reports and Blade views can be produced quickly. Symfony would be chosen if the system must join a large enterprise platform, needs a rich domain model with strict layering, or must follow a long upgrade cycle.</p>
+
+<nav><a href="q1_headless_cms.html">&larr; Question 1</a><a href="q3_xml_schema.html">Question 3 &rarr;</a></nav>
+</main></body></html>

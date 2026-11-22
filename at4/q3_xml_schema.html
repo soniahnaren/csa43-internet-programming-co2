@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 4 - Q3: Product catalogue with XML Schema</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 4</span></div>
+<div class="q"><strong>Question 3.</strong> An online electronics retailer exchanges its product catalogue with suppliers as XML files containing product ID, name, category, price, stock quantity and warranty period. Analyse how the catalogue can be controlled using XML Schema (XSD): write an XSD that defines a root element, simple and complex types, attributes, an enumeration for category, a pattern for the product ID, and range restrictions (minInclusive and maxInclusive) for price and stock. Differentiate well-formed from valid XML and compare DTD with XML Schema. Explain how XML parsers (non-validating and validating; DOM and SAX) check a document and how validation is performed in PHP (for example, DOMDocument with schemaValidate), and examine three kinds of errors that a validating parser would report for a faulty supplier file, with the way each error is corrected.<div class="meta">Marks (10) &nbsp; (CO4) &nbsp; (BL4)</div></div>
+<h1>ANSWER 3 – Controlling the product catalogue with XML Schema (XSD)</h1>
+<p><strong>Idea.</strong> The supplier files are exchanged between organisations, so the retailer needs a contract that every file must satisfy before it is imported. An XSD describes the allowed elements, order, attributes and value ranges, so mistakes such as a wrong product ID, an unknown category or a negative price are rejected automatically.</p>
+<h2>A. Sample supplier file (valid)</h2>
+<figure><div class="label">products_valid.xml</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;catalogue supplier=&quot;TechSource Distributors&quot;&gt;
+  &lt;product id=&quot;P10234&quot;&gt;
+    &lt;name&gt;Nova X5 Smartphone&lt;/name&gt;
+    &lt;category&gt;Mobile&lt;/category&gt;
+    &lt;price currency=&quot;INR&quot;&gt;24999.00&lt;/price&gt;
+    &lt;stock&gt;150&lt;/stock&gt;
+    &lt;warranty unit=&quot;months&quot;&gt;12&lt;/warranty&gt;
+  &lt;/product&gt;
+  &lt;product id=&quot;P10235&quot;&gt;
+    &lt;name&gt;AeroBook 14 Laptop&lt;/name&gt;
+    &lt;category&gt;Laptop&lt;/category&gt;
+    &lt;price&gt;58990.50&lt;/price&gt;
+    &lt;stock&gt;40&lt;/stock&gt;
+    &lt;warranty&gt;24&lt;/warranty&gt;
+  &lt;/product&gt;
+  &lt;product id=&quot;P20871&quot;&gt;
+    &lt;name&gt;BassPod Wireless Earbuds&lt;/name&gt;
+    &lt;category&gt;Audio&lt;/category&gt;
+    &lt;price&gt;2499.00&lt;/price&gt;
+    &lt;stock&gt;600&lt;/stock&gt;
+    &lt;warranty&gt;6&lt;/warranty&gt;
+  &lt;/product&gt;
+&lt;/catalogue&gt;</code></pre></figure>
+<h2>B. The XSD</h2>
+<figure><div class="label">products.xsd</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;xs:schema xmlns:xs=&quot;http://www.w3.org/2001/XMLSchema&quot; elementFormDefault=&quot;qualified&quot;&gt;
+
+  &lt;!-- ===== Simple types (restrictions) ===== --&gt;
+  &lt;xs:simpleType name=&quot;productIdType&quot;&gt;
+    &lt;xs:restriction base=&quot;xs:string&quot;&gt;
+      &lt;xs:pattern value=&quot;P[0-9]{5}&quot;/&gt;            &lt;!-- P followed by 5 digits, e.g. P10234 --&gt;
+    &lt;/xs:restriction&gt;
+  &lt;/xs:simpleType&gt;
+
+  &lt;xs:simpleType name=&quot;categoryType&quot;&gt;
+    &lt;xs:restriction base=&quot;xs:string&quot;&gt;
+      &lt;xs:enumeration value=&quot;Mobile&quot;/&gt;
+      &lt;xs:enumeration value=&quot;Laptop&quot;/&gt;
+      &lt;xs:enumeration value=&quot;Audio&quot;/&gt;
+      &lt;xs:enumeration value=&quot;Television&quot;/&gt;
+      &lt;xs:enumeration value=&quot;Accessory&quot;/&gt;
+    &lt;/xs:restriction&gt;
+  &lt;/xs:simpleType&gt;
+
+  &lt;xs:simpleType name=&quot;priceType&quot;&gt;
+    &lt;xs:restriction base=&quot;xs:decimal&quot;&gt;
+      &lt;xs:minInclusive value=&quot;1.00&quot;/&gt;
+      &lt;xs:maxInclusive value=&quot;500000.00&quot;/&gt;
+      &lt;xs:fractionDigits value=&quot;2&quot;/&gt;
+    &lt;/xs:restriction&gt;
+  &lt;/xs:simpleType&gt;
+
+  &lt;xs:simpleType name=&quot;stockType&quot;&gt;
+    &lt;xs:restriction base=&quot;xs:integer&quot;&gt;
+      &lt;xs:minInclusive value=&quot;0&quot;/&gt;
+      &lt;xs:maxInclusive value=&quot;10000&quot;/&gt;
+    &lt;/xs:restriction&gt;
+  &lt;/xs:simpleType&gt;
+
+  &lt;xs:simpleType name=&quot;warrantyMonthsType&quot;&gt;
+    &lt;xs:restriction base=&quot;xs:integer&quot;&gt;
+      &lt;xs:minInclusive value=&quot;0&quot;/&gt;
+      &lt;xs:maxInclusive value=&quot;60&quot;/&gt;
+    &lt;/xs:restriction&gt;
+  &lt;/xs:simpleType&gt;
+
+  &lt;!-- ===== Complex types ===== --&gt;
+  &lt;xs:complexType name=&quot;priceElementType&quot;&gt;          &lt;!-- text content + attribute --&gt;
+    &lt;xs:simpleContent&gt;
+      &lt;xs:extension base=&quot;priceType&quot;&gt;
+        &lt;xs:attribute name=&quot;currency&quot; type=&quot;xs:string&quot; default=&quot;INR&quot;/&gt;
+      &lt;/xs:extension&gt;
+    &lt;/xs:simpleContent&gt;
+  &lt;/xs:complexType&gt;
+
+  &lt;xs:complexType name=&quot;warrantyElementType&quot;&gt;
+    &lt;xs:simpleContent&gt;
+      &lt;xs:extension base=&quot;warrantyMonthsType&quot;&gt;
+        &lt;xs:attribute name=&quot;unit&quot; type=&quot;xs:string&quot; fixed=&quot;months&quot;/&gt;
+      &lt;/xs:extension&gt;
+    &lt;/xs:simpleContent&gt;
+  &lt;/xs:complexType&gt;
+
+  &lt;xs:complexType name=&quot;productType&quot;&gt;
+    &lt;xs:sequence&gt;                                    &lt;!-- order is enforced --&gt;
+      &lt;xs:element name=&quot;name&quot;     type=&quot;xs:string&quot;/&gt;
+      &lt;xs:element name=&quot;category&quot; type=&quot;categoryType&quot;/&gt;
+      &lt;xs:element name=&quot;price&quot;    type=&quot;priceElementType&quot;/&gt;
+      &lt;xs:element name=&quot;stock&quot;    type=&quot;stockType&quot;/&gt;
+      &lt;xs:element name=&quot;warranty&quot; type=&quot;warrantyElementType&quot;/&gt;
+    &lt;/xs:sequence&gt;
+    &lt;xs:attribute name=&quot;id&quot; type=&quot;productIdType&quot; use=&quot;required&quot;/&gt;
+  &lt;/xs:complexType&gt;
+
+  &lt;!-- ===== Root element ===== --&gt;
+  &lt;xs:element name=&quot;catalogue&quot;&gt;
+    &lt;xs:complexType&gt;
+      &lt;xs:sequence&gt;
+        &lt;xs:element name=&quot;product&quot; type=&quot;productType&quot; minOccurs=&quot;1&quot; maxOccurs=&quot;unbounded&quot;/&gt;
+      &lt;/xs:sequence&gt;
+      &lt;xs:attribute name=&quot;supplier&quot; type=&quot;xs:string&quot; use=&quot;required&quot;/&gt;
+    &lt;/xs:complexType&gt;
+    &lt;xs:unique name=&quot;uniqueProductId&quot;&gt;               &lt;!-- no duplicate IDs --&gt;
+      &lt;xs:selector xpath=&quot;product&quot;/&gt;
+      &lt;xs:field xpath=&quot;@id&quot;/&gt;
+    &lt;/xs:unique&gt;
+  &lt;/xs:element&gt;
+&lt;/xs:schema&gt;</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Requirement</th><th>How the XSD meets it</th></tr></thead><tbody>
+<tr><td>Root element</td><td><code>&lt;xs:element name=&quot;catalogue&quot;&gt;</code> with a required <code>supplier</code> attribute</td></tr>
+<tr><td>Simple types</td><td><code>productIdType</code>, <code>categoryType</code>, <code>priceType</code>, <code>stockType</code>, <code>warrantyMonthsType</code> are restrictions of built-in types</td></tr>
+<tr><td>Complex types</td><td><code>productType</code> (sequence of five child elements plus an attribute); <code>priceElementType</code> and <code>warrantyElementType</code> (text content with an attribute, using <code>simpleContent</code>)</td></tr>
+<tr><td>Attributes</td><td><code>id</code> (required) on product, <code>currency</code> (default INR) on price, <code>unit</code> (fixed &quot;months&quot;) on warranty, <code>supplier</code> on catalogue</td></tr>
+<tr><td>Enumeration</td><td><code>category</code> must be Mobile, Laptop, Audio, Television or Accessory</td></tr>
+<tr><td>Pattern</td><td>Product ID <code>P[0-9]{5}</code> (letter P and five digits)</td></tr>
+<tr><td>Range restrictions</td><td>Price: <code>minInclusive</code> 1.00, <code>maxInclusive</code> 500000.00, 2 decimals. Stock: 0 to 10000. Warranty: 0 to 60 months</td></tr>
+<tr><td>Structure rules</td><td><code>xs:sequence</code> fixes the order; <code>minOccurs</code>/<code>maxOccurs</code> allow one or more products; <code>xs:unique</code> rejects duplicate IDs</td></tr>
+</tbody></table></div>
+<h2>C. Well-formed versus valid XML</h2>
+<div class="tw"><table><thead><tr><th>Well-formed</th><th>Valid</th></tr></thead><tbody>
+<tr><td>Follows the basic XML syntax rules: one root, properly nested and closed tags, quoted attribute values, escaped <code>&amp;</code> and <code>&lt;</code>, case-matched tags</td><td>Well-formed <strong>and</strong> conforms to a DTD or XML Schema (allowed elements, order, data types, ranges)</td></tr>
+<tr><td>Checked by every XML parser</td><td>Checked only by a validating parser against a schema</td></tr>
+<tr><td><code>&lt;stock&gt;150</code> without a closing tag is not well-formed</td><td><code>&lt;category&gt;Toys&lt;/category&gt;</code> is well-formed but not valid because Toys is not in the enumeration</td></tr>
+<tr><td>A not well-formed file cannot be processed at all</td><td>A valid file is guaranteed to have the expected structure and values</td></tr>
+</tbody></table></div>
+<h2>D. DTD compared with XML Schema</h2>
+<div class="tw"><table><thead><tr><th>Feature</th><th>DTD</th><th>XML Schema (XSD)</th></tr></thead><tbody>
+<tr><td>Syntax</td><td>Special non-XML syntax (<code>&lt;!ELEMENT ...&gt;</code>)</td><td>Written in XML itself, so ordinary XML tools can read and edit it</td></tr>
+<tr><td>Data types</td><td>Almost none (<code>#PCDATA</code>, <code>CDATA</code>, <code>ID</code>)</td><td>40+ built-in types (<code>xs:decimal</code>, <code>xs:integer</code>, <code>xs:date</code>) and user-defined types</td></tr>
+<tr><td>Restrictions</td><td>Cannot limit a number range, pattern or length</td><td><code>pattern</code>, <code>enumeration</code>, <code>minInclusive</code>, <code>maxInclusive</code>, <code>length</code></td></tr>
+<tr><td>Namespaces</td><td>Not supported properly</td><td>Fully supported</td></tr>
+<tr><td>Occurrence control</td><td>Only <code>?</code>, <code>*</code>, <code>+</code></td><td>Exact <code>minOccurs</code> / <code>maxOccurs</code></td></tr>
+<tr><td>Reuse and extension</td><td>Limited (entities)</td><td>Type inheritance (<code>extension</code>, <code>restriction</code>) and reuse</td></tr>
+<tr><td>Uniqueness and keys</td><td><code>ID</code> / <code>IDREF</code> only (whole document)</td><td><code>xs:unique</code>, <code>xs:key</code>, <code>xs:keyref</code> scoped to part of a document</td></tr>
+<tr><td>Size and learning</td><td>Short and simple</td><td>More verbose, but much more precise</td></tr>
+</tbody></table></div>
+<figure><div class="label">products.dtd (the DTD can only check structure, not values)</div><pre><code>&lt;!ELEMENT catalogue (product+)&gt;
+&lt;!ATTLIST catalogue supplier CDATA #REQUIRED&gt;
+&lt;!ELEMENT product (name, category, price, stock, warranty)&gt;
+&lt;!ATTLIST product id ID #REQUIRED&gt;
+&lt;!ELEMENT name (#PCDATA)&gt;
+&lt;!ELEMENT category (#PCDATA)&gt;
+&lt;!ELEMENT price (#PCDATA)&gt;
+&lt;!ATTLIST price currency CDATA &quot;INR&quot;&gt;
+&lt;!ELEMENT stock (#PCDATA)&gt;
+&lt;!ELEMENT warranty (#PCDATA)&gt;
+&lt;!-- DTD cannot say that category must be one of five values,
+     that price lies in 1..500000 or that id looks like P12345 --&gt;</code></pre></figure>
+<h2>E. How XML parsers check a document</h2>
+<div class="tw"><table><thead><tr><th>Parser type</th><th>What it checks</th></tr></thead><tbody>
+<tr><td>Non-validating</td><td>Checks well-formedness only; it does not compare the file with a DTD/XSD (faster; the default in most libraries)</td></tr>
+<tr><td>Validating</td><td>Checks well-formedness and then validity against the DTD or schema, and reports every violation</td></tr>
+<tr><td>DOM</td><td>Reads the whole document into a tree in memory; allows random access and changes; uses memory proportional to file size</td></tr>
+<tr><td>SAX (push) / pull parser (XMLReader)</td><td>Reads sequentially and raises events (start element, text, end element) or lets the program pull the next node; small memory, read-only and forward-only, suited to very large files</td></tr>
+</tbody></table></div>
+<p>Both DOM and SAX parsers can be validating or non-validating; validation is a separate option from the parsing style. In PHP, <code>DOMDocument::load()</code> checks well-formedness and <code>schemaValidate()</code> (or <code>schemaValidateSource()</code> for a string) performs validation against an XSD. <code>libxml_use_internal_errors(true)</code> collects the messages so that the program can list them instead of printing warnings.</p>
+<figure><div class="label">validate.php (validation function)</div><pre><code>function validateXml(string $xmlFile, string $xsdFile): array
+{
+    libxml_use_internal_errors(true);          // collect errors instead of printing warnings
+    libxml_clear_errors();
+
+    $dom = new DOMDocument();
+    if (!$dom-&gt;load($xmlFile)) {               // step 1: well-formedness
+        $errs = array_map(fn($e) =&gt; [&#x27;type&#x27; =&gt; &#x27;NOT WELL-FORMED&#x27;, &#x27;line&#x27; =&gt; $e-&gt;line, &#x27;msg&#x27; =&gt; trim($e-&gt;message)],
+                          libxml_get_errors());
+        libxml_clear_errors();
+        return $errs;
+    }
+    if ($dom-&gt;schemaValidate($xsdFile)) {      // step 2: validity against the XSD
+        return [];
+    }
+    $errs = array_map(fn($e) =&gt; [&#x27;type&#x27; =&gt; &#x27;INVALID&#x27;, &#x27;line&#x27; =&gt; $e-&gt;line, &#x27;msg&#x27; =&gt; trim($e-&gt;message)],
+                      libxml_get_errors());
+    libxml_clear_errors();
+    return $errs;
+}</code></pre></figure>
+<h2>F. Three kinds of errors reported for a faulty supplier file</h2>
+<figure><div class="label">products_faulty.xml</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;catalogue supplier=&quot;TechSource Distributors&quot;&gt;
+  &lt;!-- Error 1: product id breaks the pattern P[0-9]{5} --&gt;
+  &lt;product id=&quot;PX12&quot;&gt;
+    &lt;name&gt;Nova X5 Smartphone&lt;/name&gt;
+    &lt;category&gt;Mobile&lt;/category&gt;
+    &lt;price&gt;24999.00&lt;/price&gt;
+    &lt;stock&gt;150&lt;/stock&gt;
+    &lt;warranty&gt;12&lt;/warranty&gt;
+  &lt;/product&gt;
+  &lt;!-- Error 2: category &quot;Toys&quot; is not in the enumeration --&gt;
+  &lt;product id=&quot;P10235&quot;&gt;
+    &lt;name&gt;Robo Car&lt;/name&gt;
+    &lt;category&gt;Toys&lt;/category&gt;
+    &lt;price&gt;1299.00&lt;/price&gt;
+    &lt;stock&gt;40&lt;/stock&gt;
+    &lt;warranty&gt;6&lt;/warranty&gt;
+  &lt;/product&gt;
+  &lt;!-- Error 3: price is below minInclusive (and stock above maxInclusive) --&gt;
+  &lt;product id=&quot;P20871&quot;&gt;
+    &lt;name&gt;BassPod Wireless Earbuds&lt;/name&gt;
+    &lt;category&gt;Audio&lt;/category&gt;
+    &lt;price&gt;-499.00&lt;/price&gt;
+    &lt;stock&gt;25000&lt;/stock&gt;
+    &lt;warranty&gt;6&lt;/warranty&gt;
+  &lt;/product&gt;
+&lt;/catalogue&gt;</code></pre></figure>
+<figure><div class="label">Actual output of the validator (libxml2). Message 2 is a follow-on warning for the same pattern error.</div><pre><code>$ php validate.php products_faulty.xml
+products_faulty.xml has 5 problem(s):
+1) [INVALID] line 4: Element &#x27;product&#x27;, attribute &#x27;id&#x27;: [facet &#x27;pattern&#x27;] The value &#x27;PX12&#x27; is not accepted by the pattern &#x27;P[0-9]{5}&#x27;.
+2) [INVALID] line 4: Element &#x27;product&#x27;, attribute &#x27;id&#x27;: Warning: No precomputed value available, ...
+3) [INVALID] line 14: Element &#x27;category&#x27;: [facet &#x27;enumeration&#x27;] The value &#x27;Toys&#x27; is not an element of the set {&#x27;Mobile&#x27;, &#x27;Laptop&#x27;, &#x27;Audio&#x27;, &#x27;Television&#x27;, &#x27;Accessory&#x27;}.
+4) [INVALID] line 23: Element &#x27;price&#x27;: [facet &#x27;minInclusive&#x27;] The value &#x27;-499.00&#x27; is less than the minimum value allowed (&#x27;1.00&#x27;).
+5) [INVALID] line 24: Element &#x27;stock&#x27;: [facet &#x27;maxInclusive&#x27;] The value &#x27;25000&#x27; is greater than the maximum value allowed (&#x27;10000&#x27;).</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Kind of error</th><th>Parser message</th><th>Cause</th><th>Correction</th></tr></thead><tbody>
+<tr><td>1. Pattern violation</td><td><code>[facet &#x27;pattern&#x27;]</code> value &#x27;PX12&#x27; not accepted by <code>P[0-9]{5}</code></td><td>Product ID does not have the letter P followed by exactly five digits</td><td>Supplier supplies a correct ID such as <code>P10234</code>; if the ID scheme changes, the XSD pattern is updated</td></tr>
+<tr><td>2. Enumeration violation</td><td><code>[facet &#x27;enumeration&#x27;]</code> &#x27;Toys&#x27; is not an element of the set {...}</td><td>Category is not one of the five allowed values (or is spelt differently, e.g. &quot;laptop&quot;)</td><td>Use an allowed value; to sell a new category, add <code>&lt;xs:enumeration&gt;</code> to the XSD after agreeing it with suppliers</td></tr>
+<tr><td>3. Range violation</td><td><code>[facet &#x27;minInclusive&#x27;]</code> -499.00 is less than 1.00; <code>[facet &#x27;maxInclusive&#x27;]</code> 25000 is greater than 10000</td><td>Price is negative; stock exceeds the allowed maximum (typing error)</td><td>Correct the value to lie within the range (price 1–500000, stock 0–10000)</td></tr>
+</tbody></table></div>
+<p>Other errors are caught in the same way: a missing or out-of-order element (for example <code>warranty</code> omitted) gives &quot;Missing child element(s)&quot;, an undeclared element gives &quot;This element is not expected&quot;, a missing <code>id</code> gives &quot;The attribute &#x27;id&#x27; is required&quot;, and a duplicate ID breaks the <code>xs:unique</code> rule. A file that is <strong>not well-formed</strong> (for example the unclosed <code>&lt;stock&gt;</code> tag or a bare <code>&amp;</code> in <code>products_notwellformed.xml</code>) is rejected earlier, with messages such as &quot;Opening and ending tag mismatch&quot; and &quot;xmlParseEntityRef: no name&quot;; it is corrected by closing the tag and writing <code>&amp;amp;</code>.</p>
+
+<nav><a href="q2_laravel_mvc.html">&larr; Question 2</a><a href="q4_xml_dom_xslt.html">Question 4 &rarr;</a></nav>
+</main></body></html>

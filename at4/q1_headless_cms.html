@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 4 - Q1: Headless CMS with PHP and MySQL</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 4</span></div>
+<div class="q"><strong>Question 1.</strong> An educational institution wants to publish news, events and course notices through a headless CMS built with PHP, so that the same content can be delivered to its website, mobile app and notice-board screens. Staff submit content through an admin form (title, author e-mail, publish date, category, summary and a staff ID in the format of two capital letters followed by four digits), and the CMS stores it in a MySQL database and exposes it as JSON and XML through an API. Develop the PHP solution by explaining the use of variables and data types, program control structures, and built-in functions (for example, trim, strlen, str_replace, date, json_encode, array functions); form validation and sanitisation (empty checks, filter_var, htmlspecialchars) with regular expressions (preg_match) for the e-mail and staff ID; and connecting to the database with PDO and prepared statements. Differentiate a headless CMS from a traditional coupled CMS, and evaluate the security and performance issues of the design.<div class="meta">Marks (10) &nbsp; (CO4) &nbsp; (BL5)</div></div>
+<h1>ANSWER 1 – Headless CMS with PHP, PDO and MySQL</h1>
+<p><strong>Solution overview.</strong> Staff enter content in an admin form. PHP validates and sanitises it, stores it in MySQL through PDO prepared statements, and a read-only API publishes it as JSON or XML. The website, mobile app and notice-board screens are separate front ends that only consume the API.</p>
+<figure><div class="label">Data flow</div><pre><code>Admin form -&gt; validate.php -&gt; PDO prepared INSERT -&gt; MySQL (content table)
+   -&gt; api/content.php?format=json|xml -&gt; Website | Mobile app | Notice-board screens</code></pre></figure>
+<h2>A. Variables and data types</h2>
+<p>A PHP variable starts with <code>$</code> and needs no declaration. Its type is decided by the value it holds (dynamic typing), and a value can be converted automatically (type juggling). Form data always arrives as <strong>strings</strong>, so numbers must be cast explicitly, for example <code>(int)$_GET[&#x27;page&#x27;]</code>. <code>declare(strict_types=1);</code> stops function arguments from being silently converted. Constants are defined with <code>const</code>, and <code>$_POST</code>, <code>$_GET</code>, <code>$_SERVER</code> and <code>$_SESSION</code> are superglobals available everywhere.</p>
+<div class="tw"><table><thead><tr><th>Type</th><th>Meaning</th><th>Example in this project</th></tr></thead><tbody>
+<tr><td>string</td><td>Text</td><td><code>$clean[&#x27;title&#x27;]</code>, <code>$clean[&#x27;staff_id&#x27;]</code></td></tr>
+<tr><td>int</td><td>Whole number</td><td><code>$page</code>, <code>$limit</code>, <code>$offset</code> in the API</td></tr>
+<tr><td>float</td><td>Decimal number</td><td><code>(float)$ev[&#x27;price&#x27;]</code> (Q5)</td></tr>
+<tr><td>bool</td><td>true / false</td><td><code>$saved</code>, result of <code>preg_match(...) === 1</code></td></tr>
+<tr><td>array</td><td>Ordered map of values</td><td><code>$errors</code>, <code>$clean</code>, <code>$cfg[&#x27;categories&#x27;]</code></td></tr>
+<tr><td>null</td><td>No value</td><td>Missing form field: <code>$in[$f] ?? &#x27;&#x27;</code></td></tr>
+<tr><td>object</td><td>Instance of a class</td><td><code>PDO</code>, <code>DateTime</code>, <code>DOMDocument</code></td></tr>
+</tbody></table></div>
+<h2>B. Program control structures</h2>
+<ul>
+<li><strong>Selection</strong> – <code>if / elseif / else</code> applies each validation rule; <code>match</code> or <code>switch</code> picks an option; <code>$a ?? $b</code> and <code>? :</code> give short defaults.</li>
+<li><strong>Iteration</strong> – <code>foreach</code> loops over the form fields and over database rows; <code>while ($row = $stmt-&gt;fetch())</code> can stream large results.</li>
+<li><strong>Jump / exit</strong> – <code>return</code>, <code>exit</code> and <code>continue</code> stop processing early (for example HTTP 405 for a wrong method).</li>
+<li><strong>Exception handling</strong> – <code>try { ... } catch (PDOException $e) { ... }</code> keeps database errors away from the user.</li>
+</ul>
+<figure><div class="label">Example: match expression</div><pre><code>$mime = match ($format) {
+    &#x27;xml&#x27;   =&gt; &#x27;application/xml&#x27;,
+    default =&gt; &#x27;application/json&#x27;,
+};</code></pre></figure>
+<h2>C. Built-in functions used</h2>
+<div class="tw"><table><thead><tr><th>Function</th><th>Purpose</th><th>Use in the CMS</th></tr></thead><tbody>
+<tr><td>trim()</td><td>Remove leading/trailing whitespace</td><td>Clean every submitted field before checking it</td></tr>
+<tr><td>strlen() / mb_strlen()</td><td>Length in bytes / characters</td><td>Title &lt;= 150, e-mail &lt;= 254, summary 20–2000 characters</td></tr>
+<tr><td>str_replace()</td><td>Replace text</td><td><code>str_replace(&#x27;_&#x27;, &#x27; &#x27;, $field)</code> builds readable error labels</td></tr>
+<tr><td>date() / DateTime</td><td>Format or parse dates</td><td><code>date(&#x27;Y-m-d&#x27;)</code> default publish date; <code>createFromFormat</code> rejects 2026-02-30</td></tr>
+<tr><td>json_encode()</td><td>PHP array -&gt; JSON</td><td>API output with <code>JSON_UNESCAPED_UNICODE</code>, <code>JSON_THROW_ON_ERROR</code></td></tr>
+<tr><td>array_map(), in_array(), array_keys(), array_fill_keys(), count()</td><td>Array handling</td><td>Convert DB rows to the public format; whitelist category; reset the form</td></tr>
+<tr><td>filter_var(), preg_match(), htmlspecialchars()</td><td>Validate / pattern-match / escape</td><td>Section D</td></tr>
+<tr><td>password_verify(), random_bytes(), hash_equals()</td><td>Secure authentication and tokens</td><td>Admin login and CSRF token</td></tr>
+</tbody></table></div>
+<h2>D. Form validation and sanitisation</h2>
+<p><strong>Validation</strong> decides whether a value is acceptable; <strong>sanitisation</strong> cleans a value; <strong>escaping</strong> makes a value safe for the place where it is printed. All checks run on the server, because HTML5 attributes (<code>required</code>, <code>type=&quot;email&quot;</code>) only help honest users. A correct design uses three layers: validate on input, use prepared statements for SQL, and escape with <code>htmlspecialchars()</code> on output.</p>
+<div class="tw"><table><thead><tr><th>Field</th><th>Rule</th><th>Technique</th></tr></thead><tbody>
+<tr><td>All fields</td><td>Must not be empty</td><td><code>trim()</code> then <code>=== &#x27;&#x27;</code> (not <code>empty()</code>, because <code>empty(&#x27;0&#x27;)</code> is true)</td></tr>
+<tr><td>Author e-mail</td><td>Valid address, no <code>..</code></td><td><code>FILTER_SANITIZE_EMAIL</code>, <code>filter_var(FILTER_VALIDATE_EMAIL)</code> and <code>preg_match</code></td></tr>
+<tr><td>Staff ID</td><td>Two capital letters + four digits</td><td><code>preg_match(&#x27;/^[A-Z]{2}[0-9]{4}\z/&#x27;, $id)</code></td></tr>
+<tr><td>Publish date</td><td>Real calendar date</td><td><code>DateTime::createFromFormat(&#x27;Y-m-d&#x27;)</code> and compare with the input</td></tr>
+<tr><td>Category</td><td>One of news / event / notice</td><td><code>in_array($v, $allowed, true)</code> (whitelist)</td></tr>
+<tr><td>Title / summary</td><td>Length limits</td><td><code>mb_strlen()</code></td></tr>
+<tr><td>Any text printed in HTML</td><td>Prevent XSS</td><td><code>htmlspecialchars($s, ENT_QUOTES, &#x27;UTF-8&#x27;)</code></td></tr>
+</tbody></table></div>
+<p><strong>Staff ID pattern</strong> <code>/^[A-Z]{2}[0-9]{4}\z/</code>: <code>^</code> anchors the start, <code>[A-Z]{2}</code> means exactly two capital letters, <code>[0-9]{4}</code> exactly four digits and <code>\z</code> the absolute end of the string (<code>$</code> would still accept a trailing newline). It accepts <code>AB1234</code> and rejects <code>ab1234</code>, <code>ABC123</code>, <code>AB12345</code> and <code>AB 1234</code>.</p>
+<figure><div class="label">validate.php</div><pre><code>&lt;?php
+declare(strict_types=1);
+
+/**
+ * Validate and sanitise the admin form input.
+ * @return array{0: array&lt;string,string&gt;, 1: array&lt;string,string&gt;}  [errors, cleanValues]
+ */
+function validate_content(array $in, array $allowedCategories): array
+{
+    $errors = [];
+    $clean  = [];
+
+    // 1. Trim every text field (built-in: trim) and make sure every key exists
+    foreach ([&#x27;title&#x27;, &#x27;author_email&#x27;, &#x27;publish_date&#x27;, &#x27;category&#x27;, &#x27;summary&#x27;, &#x27;staff_id&#x27;] as $f) {
+        $clean[$f] = trim((string)($in[$f] ?? &#x27;&#x27;));
+    }
+
+    // 2. Empty checks
+    foreach ($clean as $field =&gt; $value) {
+        if ($value === &#x27;&#x27;) {                       // not empty(): empty(&quot;0&quot;) is true!
+            $errors[$field] = ucfirst(str_replace(&#x27;_&#x27;, &#x27; &#x27;, $field)) . &#x27; is required.&#x27;;
+        }
+    }
+
+    // 3. Length checks (mb_strlen counts characters, strlen counts bytes)
+    if (!isset($errors[&#x27;title&#x27;]) &amp;&amp; mb_strlen($clean[&#x27;title&#x27;]) &gt; 150) {
+        $errors[&#x27;title&#x27;] = &#x27;Title must be at most 150 characters.&#x27;;
+    }
+    if (!isset($errors[&#x27;summary&#x27;]) &amp;&amp; (mb_strlen($clean[&#x27;summary&#x27;]) &lt; 20 || mb_strlen($clean[&#x27;summary&#x27;]) &gt; 2000)) {
+        $errors[&#x27;summary&#x27;] = &#x27;Summary must be 20 to 2000 characters.&#x27;;
+    }
+
+    // 4. E-mail: filter_var (standard check) AND preg_match (stricter, no consecutive dots)
+    if (!isset($errors[&#x27;author_email&#x27;])) {
+        $email = filter_var($clean[&#x27;author_email&#x27;], FILTER_SANITIZE_EMAIL);
+        $okFilter = filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+        $okRegex  = preg_match(&#x27;/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\z/&#x27;, $email) === 1
+                    &amp;&amp; strpos($email, &#x27;..&#x27;) === false;
+        if (!$okFilter || !$okRegex || strlen($email) &gt; 254) {
+            $errors[&#x27;author_email&#x27;] = &#x27;Enter a valid e-mail address.&#x27;;
+        } else {
+            $clean[&#x27;author_email&#x27;] = strtolower($email);
+        }
+    }
+
+    // 5. Staff ID: exactly two CAPITAL letters + four digits. \z (not $) rejects a trailing newline.
+    if (!isset($errors[&#x27;staff_id&#x27;]) &amp;&amp; preg_match(&#x27;/^[A-Z]{2}[0-9]{4}\z/&#x27;, $clean[&#x27;staff_id&#x27;]) !== 1) {
+        $errors[&#x27;staff_id&#x27;] = &#x27;Staff ID must be 2 capital letters followed by 4 digits (e.g. AB1234).&#x27;;
+    }
+
+    // 6. Date: must be a real calendar date in YYYY-MM-DD
+    if (!isset($errors[&#x27;publish_date&#x27;])) {
+        $d = DateTime::createFromFormat(&#x27;Y-m-d&#x27;, $clean[&#x27;publish_date&#x27;]);
+        if (!$d || $d-&gt;format(&#x27;Y-m-d&#x27;) !== $clean[&#x27;publish_date&#x27;]) {
+            $errors[&#x27;publish_date&#x27;] = &#x27;Enter a valid date (YYYY-MM-DD).&#x27;;
+        }
+    }
+
+    // 7. Category must be one of the allowed values (whitelist)
+    if (!isset($errors[&#x27;category&#x27;]) &amp;&amp; !in_array($clean[&#x27;category&#x27;], $allowedCategories, true)) {
+        $errors[&#x27;category&#x27;] = &#x27;Choose a valid category.&#x27;;
+    }
+
+    return [$errors, $clean];
+}
+
+/** Escape for HTML output (use every time user data is printed into a page). */
+function e(string $s): string
+{
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, &#x27;UTF-8&#x27;);
+}</code></pre></figure>
+<h2>E. Connecting to MySQL with PDO and prepared statements</h2>
+<p>PDO is a database-independent interface. The DSN names the driver, host, database and character set. Three options matter: <code>ERRMODE_EXCEPTION</code> (errors are thrown, not hidden), <code>FETCH_ASSOC</code> (rows as arrays) and <code>EMULATE_PREPARES =&gt; false</code> (the server prepares the statement). With a <strong>prepared statement</strong> the SQL text is sent first with placeholders (<code>:title</code>) and the values are sent separately, so the input is never treated as SQL. A value such as <code>&#x27;; DROP TABLE content; --</code> is stored as harmless text. The application should connect with a least-privilege MySQL account (SELECT and INSERT only), with credentials read from environment variables.</p>
+<figure><div class="label">db.php</div><pre><code>&lt;?php
+declare(strict_types=1);
+
+function db(): PDO
+{
+    static $pdo = null;                       // one connection per request
+    if ($pdo === null) {
+        $cfg = require __DIR__ . &#x27;/config.php&#x27;;
+        $pdo = new PDO($cfg[&#x27;db_dsn&#x27;], $cfg[&#x27;db_user&#x27;], $cfg[&#x27;db_pass&#x27;], [
+            PDO::ATTR_ERRMODE            =&gt; PDO::ERRMODE_EXCEPTION,   // throw, do not fail silently
+            PDO::ATTR_DEFAULT_FETCH_MODE =&gt; PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   =&gt; false,                    // real server-side prepared statements
+        ]);
+    }
+    return $pdo;
+}</code></pre></figure>
+<figure><div class="label">admin_form.php (PHP part: CSRF check, validation, INSERT)</div><pre><code>&lt;?php
+declare(strict_types=1);
+session_start();
+require __DIR__ . &#x27;/db.php&#x27;;
+require __DIR__ . &#x27;/validate.php&#x27;;
+require __DIR__ . &#x27;/auth.php&#x27;;
+
+$cfg = require __DIR__ . &#x27;/config.php&#x27;;
+require_admin($cfg);
+
+if (empty($_SESSION[&#x27;csrf&#x27;])) {
+    $_SESSION[&#x27;csrf&#x27;] = bin2hex(random_bytes(32));          // anti-CSRF token
+}
+
+$errors = [];
+$values = [&#x27;title&#x27;=&gt;&#x27;&#x27;,&#x27;author_email&#x27;=&gt;&#x27;&#x27;,&#x27;publish_date&#x27;=&gt;date(&#x27;Y-m-d&#x27;),&#x27;category&#x27;=&gt;&#x27;news&#x27;,&#x27;summary&#x27;=&gt;&#x27;&#x27;,&#x27;staff_id&#x27;=&gt;&#x27;&#x27;];
+$saved  = false;
+
+if ($_SERVER[&#x27;REQUEST_METHOD&#x27;] === &#x27;POST&#x27;) {
+    // CSRF check
+    if (!hash_equals($_SESSION[&#x27;csrf&#x27;], (string)($_POST[&#x27;csrf&#x27;] ?? &#x27;&#x27;))) {
+        http_response_code(403);
+        exit(&#x27;Invalid CSRF token&#x27;);
+    }
+
+    [$errors, $clean] = validate_content($_POST, $cfg[&#x27;categories&#x27;]);
+    $values = $clean;
+
+    if (!$errors) {
+        try {
+            $stmt = db()-&gt;prepare(
+                &#x27;INSERT INTO content (title, author_email, publish_date, category, summary, staff_id)
+                 VALUES (:title, :email, :pdate, :cat, :summary, :staff)&#x27;
+            );
+            $stmt-&gt;execute([
+                &#x27;:title&#x27;   =&gt; $clean[&#x27;title&#x27;],
+                &#x27;:email&#x27;   =&gt; $clean[&#x27;author_email&#x27;],
+                &#x27;:pdate&#x27;   =&gt; $clean[&#x27;publish_date&#x27;],
+                &#x27;:cat&#x27;     =&gt; $clean[&#x27;category&#x27;],
+                &#x27;:summary&#x27; =&gt; $clean[&#x27;summary&#x27;],
+                &#x27;:staff&#x27;   =&gt; $clean[&#x27;staff_id&#x27;],
+            ]);
+            $saved = true;
+            $values = array_fill_keys(array_keys($values), &#x27;&#x27;);
+            $values[&#x27;publish_date&#x27;] = date(&#x27;Y-m-d&#x27;);
+            $values[&#x27;category&#x27;] = &#x27;news&#x27;;
+        } catch (PDOException $ex) {
+            error_log($ex-&gt;getMessage());                   // log details, show a generic message
+            $errors[&#x27;db&#x27;] = &#x27;Could not save the content. Please try again later.&#x27;;
+        }
+    }
+}</code></pre></figure>
+<figure><div class="label">schema.sql</div><pre><code>CREATE DATABASE IF NOT EXISTS cms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE cms_db;
+
+CREATE TABLE IF NOT EXISTS content (
+    id            INT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title         VARCHAR(150)  NOT NULL,
+    author_email  VARCHAR(254)  NOT NULL,
+    publish_date  DATE          NOT NULL,
+    category      ENUM(&#x27;news&#x27;,&#x27;event&#x27;,&#x27;notice&#x27;) NOT NULL,
+    summary       TEXT          NOT NULL,
+    staff_id      CHAR(6)       NOT NULL,           -- e.g. AB1234
+    created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_publish (publish_date),               -- speeds up &quot;latest first&quot; listing
+    INDEX idx_category (category, publish_date)     -- speeds up category filter
+) ENGINE=InnoDB;</code></pre></figure>
+<h2>F. Exposing the content as JSON and XML</h2>
+<p><code>api/content.php</code> accepts only GET, validates <code>format</code>, <code>category</code>, <code>page</code> and <code>limit</code>, runs a prepared SELECT with <code>LIMIT</code>/<code>OFFSET</code> bound as integers, and returns either format from the same data. JSON uses <code>json_encode</code>; XML is built with <code>DOMDocument</code> and <code>createTextNode</code>, which escapes <code>&amp;</code>, <code>&lt;</code> and <code>&gt;</code>. The public output leaves out the author e-mail address.</p>
+<figure><div class="label">serialize.php</div><pre><code>&lt;?php
+declare(strict_types=1);
+
+/** Turn DB rows into the public API representation. The author&#x27;s e-mail is deliberately NOT exposed. */
+function to_public(array $rows): array
+{
+    return array_map(static fn(array $r): array =&gt; [
+        &#x27;id&#x27;        =&gt; (int)$r[&#x27;id&#x27;],
+        &#x27;title&#x27;     =&gt; $r[&#x27;title&#x27;],
+        &#x27;category&#x27;  =&gt; $r[&#x27;category&#x27;],
+        &#x27;published&#x27; =&gt; $r[&#x27;publish_date&#x27;],
+        &#x27;summary&#x27;   =&gt; $r[&#x27;summary&#x27;],
+        &#x27;staff_id&#x27;  =&gt; $r[&#x27;staff_id&#x27;],
+    ], $rows);
+}
+
+function to_json(array $items, int $page, int $limit): string
+{
+    return json_encode(
+        [&#x27;page&#x27; =&gt; $page, &#x27;limit&#x27; =&gt; $limit, &#x27;count&#x27; =&gt; count($items), &#x27;data&#x27; =&gt; $items],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR
+    );
+}
+
+function to_xml(array $items, int $page, int $limit): string
+{
+    $dom = new DOMDocument(&#x27;1.0&#x27;, &#x27;UTF-8&#x27;);
+    $dom-&gt;formatOutput = true;
+    $root = $dom-&gt;createElement(&#x27;content&#x27;);
+    $root-&gt;setAttribute(&#x27;page&#x27;, (string)$page);
+    $root-&gt;setAttribute(&#x27;limit&#x27;, (string)$limit);
+    $dom-&gt;appendChild($root);
+
+    foreach ($items as $it) {
+        $node = $dom-&gt;createElement(&#x27;item&#x27;);
+        $node-&gt;setAttribute(&#x27;id&#x27;, (string)$it[&#x27;id&#x27;]);
+        foreach ($it as $k =&gt; $v) {
+            if ($k === &#x27;id&#x27;) { continue; }
+            $child = $dom-&gt;createElement($k);
+            $child-&gt;appendChild($dom-&gt;createTextNode((string)$v));   // createTextNode escapes &amp; &lt; &gt;
+            $node-&gt;appendChild($child);
+        }
+        $root-&gt;appendChild($node);
+    }
+    return $dom-&gt;saveXML();
+}</code></pre></figure>
+<figure><div class="label">api/content.php (main part)</div><pre><code>$format   = ($_GET[&#x27;format&#x27;] ?? &#x27;json&#x27;) === &#x27;xml&#x27; ? &#x27;xml&#x27; : &#x27;json&#x27;;
+$category = $_GET[&#x27;category&#x27;] ?? &#x27;&#x27;;
+$page     = max(1, (int)($_GET[&#x27;page&#x27;]  ?? 1));
+$limit    = min(50, max(1, (int)($_GET[&#x27;limit&#x27;] ?? 10)));        // cap page size
+$offset   = ($page - 1) * $limit;
+
+$sql    = &#x27;SELECT id, title, publish_date, category, summary, staff_id
+           FROM content WHERE publish_date &lt;= CURDATE()&#x27;;        // hide future-dated items
+$params = [];
+if ($category !== &#x27;&#x27;) {
+    if (!in_array($category, $cfg[&#x27;categories&#x27;], true)) {
+        http_response_code(400);
+        exit(&#x27;Invalid category&#x27;);
+    }
+    $sql .= &#x27; AND category = :cat&#x27;;
+    $params[&#x27;:cat&#x27;] = $category;
+}
+$sql .= &#x27; ORDER BY publish_date DESC, id DESC LIMIT :lim OFFSET :off&#x27;;
+
+$stmt = db()-&gt;prepare($sql);
+foreach ($params as $k =&gt; $v) { $stmt-&gt;bindValue($k, $v, PDO::PARAM_STR); }
+$stmt-&gt;bindValue(&#x27;:lim&#x27;, $limit,  PDO::PARAM_INT);
+$stmt-&gt;bindValue(&#x27;:off&#x27;, $offset, PDO::PARAM_INT);
+$stmt-&gt;execute();
+$items = to_public($stmt-&gt;fetchAll());
+
+$body = $format === &#x27;xml&#x27; ? to_xml($items, $page, $limit) : to_json($items, $page, $limit);
+
+// ---- headers: type, CORS for the app/site/screens, HTTP caching ----
+header(&#x27;Content-Type: &#x27; . ($format === &#x27;xml&#x27; ? &#x27;application/xml&#x27; : &#x27;application/json&#x27;) . &#x27;; charset=UTF-8&#x27;);
+header(&#x27;X-Content-Type-Options: nosniff&#x27;);
+header(&#x27;Access-Control-Allow-Origin: *&#x27;);                        // read-only public data
+header(&#x27;Cache-Control: public, max-age=60&#x27;);
+$etag = &#x27;&quot;&#x27; . md5($body) . &#x27;&quot;&#x27;;
+header(&#x27;ETag: &#x27; . $etag);
+if (($_SERVER[&#x27;HTTP_IF_NONE_MATCH&#x27;] ?? &#x27;&#x27;) === $etag) {
+    http_response_code(304);                                     // client already has the latest copy
+    exit;
+}
+echo $body;</code></pre></figure>
+<figure><div class="label">Sample requests and output</div><pre><code>GET /api/content.php?format=json&amp;category=event&amp;limit=2
+{ &quot;page&quot;: 1, &quot;limit&quot;: 2, &quot;count&quot;: 1,
+  &quot;data&quot;: [ { &quot;id&quot;: 7, &quot;title&quot;: &quot;Annual Day&quot;, &quot;category&quot;: &quot;event&quot;,
+              &quot;published&quot;: &quot;2026-12-01&quot;, &quot;summary&quot;: &quot;...&quot;, &quot;staff_id&quot;: &quot;AB1234&quot; } ] }
+
+GET /api/content.php?format=xml
+&lt;content page=&quot;1&quot; limit=&quot;10&quot;&gt;&lt;item id=&quot;7&quot;&gt;&lt;title&gt;Annual Day&lt;/title&gt; ... &lt;/item&gt;&lt;/content&gt;</code></pre></figure>
+<h2>G. Headless CMS compared with a traditional (coupled) CMS</h2>
+<div class="tw"><table><thead><tr><th>Aspect</th><th>Traditional coupled CMS</th><th>Headless CMS (this design)</th></tr></thead><tbody>
+<tr><td>Architecture</td><td>Back end, database and page templates in one application</td><td>Back end only: content store plus API. Presentation is separate</td></tr>
+<tr><td>Delivery</td><td>Server renders HTML pages for one website</td><td>JSON/XML delivered to any client: website, mobile app, notice-board screens</td></tr>
+<tr><td>Front-end freedom</td><td>Limited to the CMS theme/template system</td><td>Any technology (React, Flutter, plain HTML, digital signage players)</td></tr>
+<tr><td>Reuse of content</td><td>Content tied to page layout; copying needed for other channels</td><td>Write once, publish everywhere</td></tr>
+<tr><td>Scaling</td><td>Whole application scales together</td><td>API and each front end scale (and are cached) independently</td></tr>
+<tr><td>Security surface</td><td>Public site and admin share one code base, so a theme bug can expose the admin</td><td>Admin can sit on a private network; public API is read-only</td></tr>
+<tr><td>Editor preview</td><td>Built-in &quot;what you see is what you get&quot;</td><td>Needs a separate preview build; less convenient for editors</td></tr>
+<tr><td>SEO</td><td>Server-rendered pages are search-friendly by default</td><td>Front end must use server-side rendering or static generation</td></tr>
+<tr><td>Effort and cost</td><td>Quick start, fewer parts</td><td>More parts to build, host and monitor</td></tr>
+</tbody></table></div>
+<h2>H. Evaluation of security and performance</h2>
+<p><strong>Security</strong></p>
+<div class="tw"><table><thead><tr><th>Threat</th><th>Risk in this design</th><th>Control used / recommended</th></tr></thead><tbody>
+<tr><td>SQL injection</td><td>Form and query-string values reach SQL</td><td>PDO prepared statements everywhere; whitelist for <code>category</code>; integers cast for paging</td></tr>
+<tr><td>Cross-site scripting (XSS)</td><td>Malicious title or summary shown by a client or the admin form</td><td>Escape with <code>htmlspecialchars</code> on output; JSON/XML encoders escape automatically; clients must not insert API text with <code>innerHTML</code></td></tr>
+<tr><td>CSRF</td><td>A logged-in staff member is tricked into posting content</td><td>Random per-session token checked with <code>hash_equals</code>; SameSite cookies</td></tr>
+<tr><td>Weak admin authentication</td><td>Anyone could publish false notices</td><td>Password stored as a hash, checked with <code>password_verify</code>; HTTPS only; add two-factor login and roles</td></tr>
+<tr><td>Unauthorised writes via API</td><td>Public API could be misused to change data</td><td>Public endpoint is GET-only (405 for others); the DB user has no UPDATE/DELETE rights</td></tr>
+<tr><td>Data exposure</td><td>Author e-mail addresses could be harvested</td><td>E-mail is not included in the API output; only the staff ID is published</td></tr>
+<tr><td>Information leakage</td><td>SQL errors reveal table names</td><td><code>display_errors</code> off; errors logged with <code>error_log</code>; the user sees a generic message</td></tr>
+<tr><td>Denial of service / scraping</td><td>Large or repeated requests overload the database</td><td><code>limit</code> capped at 50; rate limiting at the web server or API gateway; CDN in front</td></tr>
+<tr><td>Secrets in source code</td><td>DB password committed to a repository</td><td>Credentials in environment variables or a file outside the web root</td></tr>
+</tbody></table></div>
+<p><strong>Performance</strong></p>
+<div class="tw"><table><thead><tr><th>Issue</th><th>Effect</th><th>Remedy</th></tr></thead><tbody>
+<tr><td>Every request queries MySQL</td><td>High load when many screens and apps poll</td><td><code>Cache-Control: max-age=60</code>, <code>ETag</code> with 304 responses, CDN or server cache (APCu/Redis)</td></tr>
+<tr><td>No pagination</td><td>Large responses and slow queries</td><td><code>LIMIT/OFFSET</code> with a maximum page size; keyset paging for very deep pages</td></tr>
+<tr><td>Missing indexes</td><td>Full table scans on filter and sort</td><td>Indexes on <code>publish_date</code> and <code>(category, publish_date)</code></td></tr>
+<tr><td>Payload size</td><td>XML is larger than JSON; slow on mobile networks</td><td>gzip/brotli compression; return only the needed fields; offer JSON by default</td></tr>
+<tr><td>Extra network hop for the website</td><td>Slower first paint than a coupled CMS</td><td>Server-side rendering or static generation with periodic refresh</td></tr>
+<tr><td>Connection overhead</td><td>New DB connection per request</td><td>One PDO connection per request (<code>db()</code>), persistent connections or pooling for high traffic</td></tr>
+</tbody></table></div>
+<p><strong>Verdict.</strong> For an institution that must serve one set of notices to a website, a mobile app and several screens, the headless design is justified: content is entered once, each channel is free to display it in its own way, and the public surface is a small read-only API that is easy to cache and protect. Its costs are extra components and the loss of built-in preview and SEO rendering. These are acceptable if the controls above are applied (prepared statements, output escaping, CSRF tokens, hashed passwords with HTTPS, a least-privilege database user, caching and pagination). If the institution had only a single website and no developers, a coupled CMS would be simpler.</p>
+
+<nav><span></span><a href="q2_laravel_mvc.html">Question 2 &rarr;</a></nav>
+</main></body></html>

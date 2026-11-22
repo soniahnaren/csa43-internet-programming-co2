@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 4 - Q4: Events feed: DOM, XPath and XSLT</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 4</span></div>
+<div class="q"><strong>Question 4.</strong> A city events portal receives event details from several organisers as an XML feed (event name, venue, date, fee and category). Design a PHP solution that reads, modifies and presents this feed. Explain the XML DOM tree and its node types; the use of DOMDocument and DOMXPath (and SimpleXML) to traverse the tree, select nodes with XPath, add a new event, update a fee and delete a cancelled event; and the comparison of DOM with SAX or pull parsers for large files. Then write an XSLT style sheet that converts the feed into an HTML table showing only events of one category, sorted by date, and explain the elements xsl:template, xsl:for-each, xsl:value-of, xsl:sort, xsl:if or xsl:choose and xsl:param. Show how PHP applies the style sheet with XSLTProcessor, and justify server-side versus client-side transformation in terms of performance, compatibility and security.<div class="meta">Marks (10) &nbsp; (CO4) &nbsp; (BL5)</div></div>
+<h1>ANSWER 4 – Events feed: reading, modifying and presenting XML with PHP and XSLT</h1>
+<p><strong>Solution.</strong> The portal keeps the organisers&#x27; feed as <code>events.xml</code>. PHP loads it with DOM, uses XPath to find nodes, adds, updates and deletes events, and then presents it by applying an XSLT style sheet on the server. Large feeds are read with a streaming (pull) parser.</p>
+<figure><div class="label">events.xml</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;events&gt;
+  &lt;event id=&quot;E101&quot; category=&quot;Music&quot; status=&quot;active&quot;&gt;
+    &lt;name&gt;Riverside Jazz Night&lt;/name&gt;
+    &lt;venue&gt;Town Hall Lawn&lt;/venue&gt;
+    &lt;date&gt;2026-12-05&lt;/date&gt;
+    &lt;fee&gt;500&lt;/fee&gt;
+  &lt;/event&gt;
+  &lt;event id=&quot;E102&quot; category=&quot;Sports&quot; status=&quot;active&quot;&gt;
+    &lt;name&gt;City Marathon&lt;/name&gt;
+    &lt;venue&gt;Central Stadium&lt;/venue&gt;
+    &lt;date&gt;2026-12-12&lt;/date&gt;
+    &lt;fee&gt;0&lt;/fee&gt;
+  &lt;/event&gt;
+  &lt;event id=&quot;E103&quot; category=&quot;Music&quot; status=&quot;active&quot;&gt;
+    &lt;name&gt;Classical Evening&lt;/name&gt;
+    &lt;venue&gt;Lakshmi Auditorium&lt;/venue&gt;
+    &lt;date&gt;2026-12-01&lt;/date&gt;
+    &lt;fee&gt;750&lt;/fee&gt;
+  &lt;/event&gt;
+  &lt;event id=&quot;E104&quot; category=&quot;Art&quot; status=&quot;cancelled&quot;&gt;
+    &lt;name&gt;Open-Air Painting Fair&lt;/name&gt;
+    &lt;venue&gt;Gandhi Park&lt;/venue&gt;
+    &lt;date&gt;2026-12-08&lt;/date&gt;
+    &lt;fee&gt;100&lt;/fee&gt;
+  &lt;/event&gt;
+  &lt;event id=&quot;E105&quot; category=&quot;Music&quot; status=&quot;active&quot;&gt;
+    &lt;name&gt;Folk Fusion Concert&lt;/name&gt;
+    &lt;venue&gt;Kalaivanar Hall&lt;/venue&gt;
+    &lt;date&gt;2026-12-20&lt;/date&gt;
+    &lt;fee&gt;0&lt;/fee&gt;
+  &lt;/event&gt;
+&lt;/events&gt;</code></pre></figure>
+<h2>A. The XML DOM tree and node types</h2>
+<p>The Document Object Model represents a document as a tree of nodes. The <code>events</code> element is the root; each <code>event</code> is a child element; <code>name</code>, <code>venue</code>, <code>date</code> and <code>fee</code> are its children, and their text is stored in text nodes.</p>
+<div class="tw"><table><thead><tr><th>Node type</th><th>PHP class</th><th>Example in events.xml</th></tr></thead><tbody>
+<tr><td>Document node</td><td><code>DOMDocument</code></td><td>The whole file (parent of the root element)</td></tr>
+<tr><td>Element node</td><td><code>DOMElement</code></td><td><code>&lt;events&gt;</code>, <code>&lt;event&gt;</code>, <code>&lt;name&gt;</code></td></tr>
+<tr><td>Attribute node</td><td><code>DOMAttr</code></td><td><code>id=&quot;E101&quot;</code>, <code>category=&quot;Music&quot;</code>, <code>status=&quot;active&quot;</code></td></tr>
+<tr><td>Text node</td><td><code>DOMText</code></td><td>&quot;Riverside Jazz Night&quot; inside <code>&lt;name&gt;</code></td></tr>
+<tr><td>Comment node</td><td><code>DOMComment</code></td><td><code>&lt;!-- ... --&gt;</code></td></tr>
+<tr><td>CDATA section</td><td><code>DOMCdataSection</code></td><td><code>&lt;![CDATA[ text with &lt; and &amp; ]]&gt;</code></td></tr>
+<tr><td>Processing instruction</td><td><code>DOMProcessingInstruction</code></td><td><code>&lt;?xml-stylesheet ...?&gt;</code></td></tr>
+<tr><td>Document type</td><td><code>DOMDocumentType</code></td><td><code>&lt;!DOCTYPE ...&gt;</code></td></tr>
+</tbody></table></div>
+<p>Whitespace between tags also becomes text nodes unless <code>preserveWhiteSpace = false</code> is set, which is why the code sets it before loading.</p>
+<h2>B. DOMDocument, DOMXPath and SimpleXML</h2>
+<ul>
+<li><strong>DOMDocument</strong> loads, creates, changes and saves the tree (<code>load</code>, <code>createElement</code>, <code>appendChild</code>, <code>removeChild</code>, <code>save</code>).</li>
+<li><strong>DOMXPath</strong> selects nodes with path expressions and can calculate (<code>count()</code>, <code>sum()</code>).</li>
+<li><strong>SimpleXML</strong> offers shorter object-style access (<code>$xml-&gt;event[0]-&gt;name</code>, <code>$xml-&gt;xpath(...)</code>), good for quick reading; DOM is better for detailed editing.</li>
+</ul>
+<div class="tw"><table><thead><tr><th>XPath expression</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>//event[@category=&#x27;Music&#x27;]</code></td><td>All events whose category attribute is Music</td></tr>
+<tr><td><code>//event[@id=&#x27;E101&#x27;]/fee</code></td><td>Fee element of one event</td></tr>
+<tr><td><code>//event[@status=&#x27;cancelled&#x27;]</code></td><td>Cancelled events (to delete)</td></tr>
+<tr><td><code>//event[fee &gt; 400]</code></td><td>Events with fee above 400</td></tr>
+<tr><td><code>count(//event)</code> / <code>sum(//event/fee)</code></td><td>Number of events / total of fees</td></tr>
+</tbody></table></div>
+<figure><div class="label">dom_ops.php (select, add, update, delete)</div><pre><code>$src = __DIR__ . &#x27;/events.xml&#x27;;
+$tmp = sys_get_temp_dir() . &#x27;/events_working.xml&#x27;;
+copy($src, $tmp);
+
+$dom = new DOMDocument(&#x27;1.0&#x27;, &#x27;UTF-8&#x27;);
+$dom-&gt;preserveWhiteSpace = false;
+$dom-&gt;formatOutput       = true;
+$dom-&gt;load($tmp);
+$xp = new DOMXPath($dom);
+
+/* ---------- 1. TRAVERSE + SELECT with XPath ---------- */
+echo &quot;== Music events (XPath //event[@category=&#x27;Music&#x27;]) ==\n&quot;;
+foreach ($xp-&gt;query(&quot;//event[@category=&#x27;Music&#x27;]&quot;) as $ev) {          // DOMElement
+    printf(&quot;%s | %s | %s | Rs.%s\n&quot;,
+        $ev-&gt;getAttribute(&#x27;id&#x27;),
+        $xp-&gt;evaluate(&#x27;string(name)&#x27;,  $ev),
+        $xp-&gt;evaluate(&#x27;string(date)&#x27;,  $ev),
+        $xp-&gt;evaluate(&#x27;string(fee)&#x27;,   $ev));
+}
+echo &quot;Total events: &quot; . $xp-&gt;evaluate(&#x27;count(//event)&#x27;) . &quot;\n&quot;;
+echo &quot;Average fee : &quot; . $xp-&gt;evaluate(&#x27;sum(//event/fee) div count(//event)&#x27;) . &quot;\n\n&quot;;
+
+/* ---------- 2. ADD a new event ---------- */
+function addEvent(DOMDocument $dom, array $e): void
+{
+    $ev = $dom-&gt;createElement(&#x27;event&#x27;);
+    $ev-&gt;setAttribute(&#x27;id&#x27;, $e[&#x27;id&#x27;]);
+    $ev-&gt;setAttribute(&#x27;category&#x27;, $e[&#x27;category&#x27;]);
+    $ev-&gt;setAttribute(&#x27;status&#x27;, &#x27;active&#x27;);
+    foreach ([&#x27;name&#x27;, &#x27;venue&#x27;, &#x27;date&#x27;, &#x27;fee&#x27;] as $field) {
+        $child = $dom-&gt;createElement($field);
+        $child-&gt;appendChild($dom-&gt;createTextNode((string)$e[$field]));  // text node =&gt; auto-escaped
+        $ev-&gt;appendChild($child);
+    }
+    $dom-&gt;documentElement-&gt;appendChild($ev);
+}
+addEvent($dom, [&#x27;id&#x27; =&gt; &#x27;E106&#x27;, &#x27;category&#x27; =&gt; &#x27;Music&#x27;, &#x27;name&#x27; =&gt; &#x27;Rock &amp; Roll Carnival&#x27;,
+                &#x27;venue&#x27; =&gt; &#x27;Beach Road Grounds&#x27;, &#x27;date&#x27; =&gt; &#x27;2026-12-27&#x27;, &#x27;fee&#x27; =&gt; 300]);
+
+/* ---------- 3. UPDATE a fee ---------- */
+$fee = $xp-&gt;query(&quot;//event[@id=&#x27;E101&#x27;]/fee&quot;)-&gt;item(0);
+if ($fee) {
+    $fee-&gt;nodeValue = &#x27;650&#x27;;
+}
+
+/* ---------- 4. DELETE cancelled events ---------- */
+foreach (iterator_to_array($xp-&gt;query(&quot;//event[@status=&#x27;cancelled&#x27;]&quot;)) as $ev) {  // copy list first
+    $ev-&gt;parentNode-&gt;removeChild($ev);
+}
+
+$dom-&gt;save($tmp);
+echo &quot;== Updated feed ==\n&quot; . $dom-&gt;saveXML();</code></pre></figure>
+<figure><div class="label">Output of the script when run on the sample feed</div><pre><code>== Music events ==
+E101 | Riverside Jazz Night | 2026-12-05 | Rs.500
+E103 | Classical Evening | 2026-12-01 | Rs.750
+E105 | Folk Fusion Concert | 2026-12-20 | Rs.0
+Total events: 5     Average fee: 270
+... after changes: E101 fee = 650, E106 &quot;Rock &amp; Roll Carnival&quot; added, E104 (cancelled) removed</code></pre></figure>
+<p>A copy of the node list is taken (<code>iterator_to_array</code>) before deleting, because removing nodes while looping over a live <code>DOMNodeList</code> skips items. <code>createTextNode()</code> is used for new values so that characters such as <code>&amp;</code> are escaped correctly (<code>Rock &amp;amp; Roll</code>).</p>
+<h2>C. DOM compared with SAX and pull parsers</h2>
+<div class="tw"><table><thead><tr><th>Feature</th><th>DOM</th><th>SAX (push)</th><th>Pull (XMLReader)</th></tr></thead><tbody>
+<tr><td>Model</td><td>Whole tree in memory</td><td>Parser calls your handlers for each event</td><td>Your code asks for the next node</td></tr>
+<tr><td>Memory use</td><td>High (grows with file size)</td><td>Very low</td><td>Very low</td></tr>
+<tr><td>Access</td><td>Random access, XPath, navigation both ways</td><td>Forward only; no XPath</td><td>Forward only; can <code>expand()</code> one node into DOM</td></tr>
+<tr><td>Modify the document</td><td>Yes</td><td>No (read-only)</td><td>No (read-only; write with XMLWriter)</td></tr>
+<tr><td>Programming effort</td><td>Simple</td><td>Harder (state must be tracked in handlers)</td><td>Moderate, easier than SAX</td></tr>
+<tr><td>Best for</td><td>Small/medium feeds that must be edited</td><td>Huge files, one-pass processing</td><td>Huge files in PHP (the usual choice)</td></tr>
+</tbody></table></div>
+<p>PHP offers SAX-style callbacks (<code>xml_parser_create()</code>) and the pull parser <code>XMLReader</code>; <code>XMLReader</code> is the usual choice. For a feed with millions of events the portal should stream with <code>XMLReader</code>, convert one <code>event</code> at a time with <code>expand()</code>, and keep memory constant. Because the portal&#x27;s own feeds are small, DOM is used for editing.</p>
+<figure><div class="label">XMLReader (streaming) example</div><pre><code>$r = new XMLReader();
+$r-&gt;open($tmp);
+while ($r-&gt;read()) {
+    if ($r-&gt;nodeType === XMLReader::ELEMENT &amp;&amp; $r-&gt;name === &#x27;event&#x27;) {
+        $e = simplexml_import_dom((new DOMDocument())-&gt;importNode($r-&gt;expand(), true));  // one event at a time
+        echo $e[&#x27;id&#x27;], &#x27; &#x27;, $e-&gt;name, &quot;\n&quot;;
+    }
+}
+$r-&gt;close();</code></pre></figure>
+<h2>D. XSLT style sheet: events of one category, sorted by date</h2>
+<figure><div class="label">events.xsl</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;xsl:stylesheet version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot;&gt;
+  &lt;xsl:output method=&quot;html&quot; encoding=&quot;UTF-8&quot; indent=&quot;yes&quot;/&gt;
+
+  &lt;!-- value supplied from PHP with XSLTProcessor::setParameter() --&gt;
+  &lt;xsl:param name=&quot;category&quot; select=&quot;&#x27;Music&#x27;&quot;/&gt;
+
+  &lt;!-- root template: builds the page skeleton --&gt;
+  &lt;xsl:template match=&quot;/events&quot;&gt;
+    &lt;html&gt;
+      &lt;head&gt;
+        &lt;title&gt;&lt;xsl:value-of select=&quot;$category&quot;/&gt; events&lt;/title&gt;
+        &lt;style&gt;
+          table{border-collapse:collapse;font-family:Arial;width:100%}
+          th,td{border:1px solid #444;padding:6px 10px;text-align:left}
+          th{background:#1f4e79;color:#fff}
+          .free{color:green;font-weight:bold}
+        &lt;/style&gt;
+      &lt;/head&gt;
+      &lt;body&gt;
+        &lt;h2&gt;&lt;xsl:value-of select=&quot;$category&quot;/&gt; events (sorted by date)&lt;/h2&gt;
+        &lt;table&gt;
+          &lt;tr&gt;&lt;th&gt;Event&lt;/th&gt;&lt;th&gt;Venue&lt;/th&gt;&lt;th&gt;Date&lt;/th&gt;&lt;th&gt;Fee (Rs.)&lt;/th&gt;&lt;/tr&gt;
+
+          &lt;!-- loop: only events of the chosen category and not cancelled, sorted by date --&gt;
+          &lt;xsl:for-each select=&quot;event[@category=$category]&quot;&gt;
+            &lt;xsl:sort select=&quot;date&quot; data-type=&quot;text&quot; order=&quot;ascending&quot;/&gt;
+            &lt;xsl:if test=&quot;@status != &#x27;cancelled&#x27;&quot;&gt;
+              &lt;tr&gt;
+                &lt;td&gt;&lt;xsl:value-of select=&quot;name&quot;/&gt;&lt;/td&gt;
+                &lt;td&gt;&lt;xsl:value-of select=&quot;venue&quot;/&gt;&lt;/td&gt;
+                &lt;td&gt;&lt;xsl:value-of select=&quot;date&quot;/&gt;&lt;/td&gt;
+                &lt;td&gt;
+                  &lt;xsl:choose&gt;
+                    &lt;xsl:when test=&quot;fee = 0&quot;&gt;&lt;span class=&quot;free&quot;&gt;FREE&lt;/span&gt;&lt;/xsl:when&gt;
+                    &lt;xsl:otherwise&gt;&lt;xsl:value-of select=&quot;fee&quot;/&gt;&lt;/xsl:otherwise&gt;
+                  &lt;/xsl:choose&gt;
+                &lt;/td&gt;
+              &lt;/tr&gt;
+            &lt;/xsl:if&gt;
+          &lt;/xsl:for-each&gt;
+        &lt;/table&gt;
+        &lt;p&gt;Total shown: &lt;xsl:value-of select=&quot;count(event[@category=$category and @status!=&#x27;cancelled&#x27;])&quot;/&gt;&lt;/p&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  &lt;/xsl:template&gt;
+&lt;/xsl:stylesheet&gt;</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Element</th><th>Purpose</th><th>Where it is used</th></tr></thead><tbody>
+<tr><td><code>xsl:stylesheet</code> / <code>xsl:output</code></td><td>Root of the style sheet; sets output type (HTML)</td><td>Top of the file</td></tr>
+<tr><td><code>xsl:template match=&quot;/events&quot;</code></td><td>A rule applied when a node matches the pattern; builds the output for it</td><td>Creates the HTML page from the root element</td></tr>
+<tr><td><code>xsl:for-each select=&quot;...&quot;</code></td><td>Loops over a node set</td><td>Loops over <code>event[@category=$category]</code></td></tr>
+<tr><td><code>xsl:value-of select=&quot;...&quot;</code></td><td>Writes the text value of an expression</td><td>Name, venue, date, fee, and the count of events shown</td></tr>
+<tr><td><code>xsl:sort select=&quot;date&quot;</code></td><td>Orders the nodes in the loop (<code>ascending</code>/<code>descending</code>, <code>text</code>/<code>number</code>)</td><td>Sorts by date; ISO dates (YYYY-MM-DD) sort correctly as text</td></tr>
+<tr><td><code>xsl:if test=&quot;...&quot;</code></td><td>Single condition (no else)</td><td>Skips cancelled events</td></tr>
+<tr><td><code>xsl:choose</code> / <code>xsl:when</code> / <code>xsl:otherwise</code></td><td>Multi-way condition (like if/else)</td><td>Shows FREE when fee is 0, otherwise the amount</td></tr>
+<tr><td><code>xsl:param name=&quot;category&quot;</code></td><td>Parameter whose value comes from outside; <code>$category</code> uses it</td><td>PHP supplies the chosen category</td></tr>
+</tbody></table></div>
+<h2>E. Applying the style sheet in PHP with XSLTProcessor</h2>
+<figure><div class="label">transform.php</div><pre><code>$allowed  = [&#x27;Music&#x27;, &#x27;Sports&#x27;, &#x27;Art&#x27;];                       // whitelist =&gt; no XPath injection
+$category = $_GET[&#x27;category&#x27;] ?? ($argv[1] ?? &#x27;Music&#x27;);
+if (!in_array($category, $allowed, true)) {
+    http_response_code(400);
+    exit(&#x27;Unknown category&#x27;);
+}
+
+$xml = new DOMDocument();
+$xml-&gt;load(__DIR__ . &#x27;/events.xml&#x27;, LIBXML_NONET);            // never fetch network resources
+
+$xsl = new DOMDocument();
+$xsl-&gt;load(__DIR__ . &#x27;/events.xsl&#x27;, LIBXML_NONET);
+
+$proc = new XSLTProcessor();
+$proc-&gt;importStylesheet($xsl);
+$proc-&gt;setParameter(&#x27;&#x27;, &#x27;category&#x27;, $category);               // passes &lt;xsl:param name=&quot;category&quot;&gt;
+// (do NOT call registerPHPFunctions(): it would let a stylesheet run PHP code)
+
+header(&#x27;Content-Type: text/html; charset=UTF-8&#x27;);
+echo $proc-&gt;transformToXml($xml);</code></pre></figure>
+<figure><div class="label">Result of transform.php?category=Music (table content)</div><pre><code>&lt;h2&gt;Music events (sorted by date)&lt;/h2&gt;
+Event                 Venue               Date         Fee (Rs.)
+Classical Evening     Lakshmi Auditorium  2026-12-01   750
+Riverside Jazz Night  Town Hall Lawn      2026-12-05   500
+Folk Fusion Concert   Kalaivanar Hall     2026-12-20   FREE
+Total shown: 3</code></pre></figure>
+<p>The category parameter is checked against a whitelist before it is passed to the style sheet, <code>LIBXML_NONET</code> stops the parser from fetching network resources, and <code>registerPHPFunctions()</code> is not enabled, so a style sheet cannot execute PHP code.</p>
+<h2>F. Server-side versus client-side transformation</h2>
+<div class="tw"><table><thead><tr><th>Criterion</th><th>Server-side (PHP XSLTProcessor)</th><th>Client-side (browser XSLT)</th></tr></thead><tbody>
+<tr><td>Performance</td><td>Uses server CPU, but the result can be cached; browser receives small ready HTML; works on weak phones</td><td>Server sends raw XML plus style sheet (more data); each user&#x27;s device does the work; no server cache of the HTML</td></tr>
+<tr><td>Compatibility</td><td>Same output for every browser, crawler and app; no browser support needed</td><td>Depends on the browser; browsers support only XSLT 1.0, and Chrome&#x27;s published plan was to stop XSLT working in stable releases from Chrome 158 (17 Nov 2026), with Firefox and WebKit also indicating removal plans. Verify the current status before relying on it</td></tr>
+<tr><td>Security</td><td>Source XML and rules stay on the server; input can be validated and the processor locked down; but the server must be protected against XXE and untrusted style sheets</td><td>Raw feed and style sheet are exposed to users; the browser XSLT engine (libxslt) is a large attack surface, which is the reason browser vendors give for removing it</td></tr>
+<tr><td>Other</td><td>Search engines can read the HTML; easy to log and test</td><td>Offloads work from the server only for very high traffic, and SEO suffers</td></tr>
+</tbody></table></div>
+<p><strong>Justification.</strong> The portal should transform on the <strong>server</strong>: the HTML can be cached, every browser and search engine receives the same result, the whole feed and the processing rules stay under the portal&#x27;s control, and it avoids dependence on browser features that are being removed. Client-side XSLT would only be considered for an internal tool where the browser is fixed and traffic is very high.</p>
+
+<nav><a href="q3_xml_schema.html">&larr; Question 3</a><a href="q5_structured_data.html">Question 5 &rarr;</a></nav>
+</main></body></html>
