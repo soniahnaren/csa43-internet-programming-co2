@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 5 - Q4: Live ambulance data: WebSockets, 5G and edge</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 5</span></div>
+<div class="q"><strong>Question 4.</strong> A city ambulance service wants a web application that shows live ambulance locations on a map and streams vital signs of patients from the ambulance to the hospital emergency team, with delays of only a few milliseconds. Analyse how WebSockets, 5G and edge computing support this requirement. Explain the WebSocket handshake (HTTP Upgrade), full-duplex communication, message events and heartbeat handling, and compare WebSockets with polling, long polling and Server-Sent Events. Explain the 5G features that matter for web applications (eMBB, URLLC, mMTC, network slicing) and the role of edge computing and multi-access edge computing (MEC) in processing data near the ambulance. Discuss the issues of reconnection, scaling of connections, security (WSS, authentication and origin checks) and data privacy, and justify your choice of where to place each component.<div class="meta">Marks (10) &nbsp; (CO5) &nbsp; (BL4)</div></div>
+<h1>ANSWER 4 – Live ambulance tracking and vitals streaming (WebSockets, 5G, edge)</h1>
+<p><strong>Requirement.</strong> Ambulance positions must move on a map and patient vital signs must reach the emergency team within a few milliseconds. Ordinary request/response web pages cannot do this: the browser would have to keep asking. The design combines three technologies: <strong>WebSockets</strong> (a permanent two-way connection that lets the server push data the moment it arrives), <strong>5G</strong> (a radio network that can give low latency and high reliability to moving vehicles) and <strong>edge computing</strong> (processing close to the ambulance instead of in a distant data centre).</p>
+<h2>A. Overall design and where each component is placed</h2>
+<figure><div class="label">Data path</div><pre><code>Ambulance: GPS + patient monitor
+        |  5G modem on a URLLC / priority slice
+        v
+MEC edge node: WebSocket gateway, critical-alert rules, short buffer
+        |                                          |
+        | WSS (TLS)                                | secure link (filtered / summarised data)
+        v                                          v
+Hospital emergency dashboard             Cloud or hospital data centre: history, analytics, EHR, audit</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Component</th><th>Placement</th><th>Justification</th></tr></thead><tbody>
+<tr><td>Sensors and GPS, local alarm</td><td>In the ambulance</td><td>Must work even with no network; paramedics see alarms immediately</td></tr>
+<tr><td>5G modem and slice</td><td>In the ambulance, using a URLLC/priority slice from the operator</td><td>Gives low delay and prioritised, reliable transport that is isolated from consumer traffic</td></tr>
+<tr><td>WebSocket gateway and critical-alert rules (SpO2, heart rate)</td><td><strong>Edge (MEC)</strong> at the operator site nearest the city</td><td>Removes the long trip to a distant cloud (each extra 1000 km adds about 5 ms one way in fibre) and keeps working if the link to the cloud is slow; only filtered or summarised data goes further</td></tr>
+<tr><td>Short-term buffer of recent events (for resume after reconnect)</td><td>Edge</td><td>Replay of missed readings needs low delay and is only a few minutes of data</td></tr>
+<tr><td>History, analytics, patient record, audit logs</td><td>Cloud or hospital data centre</td><td>Needs durable storage, large capacity, backups and compliance; not delay-critical</td></tr>
+<tr><td>Emergency team dashboard</td><td>Browser inside the hospital on WSS</td><td>Receives pushed events; the hospital network is close to the edge or connected by a private link</td></tr>
+<tr><td>Identity provider / token service</td><td>Hospital cloud (tokens are verified at the edge)</td><td>Central control of accounts; edge checks need only the signature key</td></tr>
+</tbody></table></div>
+<h2>B. The WebSocket protocol</h2>
+<p><strong>Handshake (HTTP Upgrade).</strong> A WebSocket starts as an ordinary HTTP/1.1 GET request that asks the server to switch protocol. The client sends a random <code>Sec-WebSocket-Key</code>; the server proves it understood by returning <code>Sec-WebSocket-Accept</code> (the key combined with a fixed GUID, hashed with SHA-1 and Base64 encoded) and status <strong>101 Switching Protocols</strong>. After that the same TCP connection carries WebSocket frames instead of HTTP. Because the handshake is an HTTP request, the server can check the <code>Origin</code> header and the credentials <strong>before</strong> it accepts the connection.</p>
+<figure><div class="label">Handshake</div><pre><code>GET / HTTP/1.1
+Host: edge.city.example
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+Origin: https://emergency.hospital.example
+Sec-WebSocket-Protocol: ambulance.v1, token.&lt;short-lived token&gt;
+
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+Sec-WebSocket-Protocol: ambulance.v1</code></pre></figure>
+<ul>
+<li><strong>Full-duplex:</strong> both sides can send at any time on the same connection; the ambulance sends data while the hospital sends commands (subscribe, resume) without opening new connections.</li>
+<li><strong>Framing and overhead:</strong> after the handshake each message has only a 2–14 byte frame header (HTTP requests carry hundreds of bytes of headers every time), which is why latency and bandwidth are low.</li>
+<li><strong>Events (browser API):</strong> <code>onopen</code> (connected), <code>onmessage</code> (data arrived), <code>onerror</code> and <code>onclose</code> (with a close code such as 1000 normal, 1008 policy violation, 1009 message too big).</li>
+<li><strong>Heartbeat:</strong> a connection can become half-open (phone enters a tunnel and no close is ever sent). The server sends a protocol <strong>ping</strong> every interval; the client answers with <strong>pong</strong>; no pong for one interval means the socket is terminated. Browsers cannot see protocol pings, so the server also sends an application message <code>hb</code>, and the page closes and reconnects if nothing arrives for three intervals.</li>
+</ul>
+<figure><div class="label">server.js: origin check and authentication during the HTTP Upgrade</div><pre><code>  // ---------- 1. HTTP Upgrade: origin check + authentication BEFORE the socket is accepted ----------
+  server.on(&#x27;upgrade&#x27;, (req, socket, head) =&gt; {
+    const reject = (code, text) =&gt; { socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\n\r\n`); socket.destroy(); };
+    const origin = req.headers.origin;
+    if (origin &amp;&amp; !allowedOrigins.includes(origin)) return reject(403, &#x27;Forbidden&#x27;);       // blocks Cross-Site WebSocket Hijacking
+    const protos = (req.headers[&#x27;sec-websocket-protocol&#x27;] || &#x27;&#x27;).split(&#x27;,&#x27;).map((s) =&gt; s.trim());
+    const tokenProto = protos.find((p) =&gt; p.startsWith(&#x27;token.&#x27;));
+    const claims = tokenProto ? verifyToken(tokenProto.slice(6)) : null;
+    if (!claims || ![&#x27;ambulance&#x27;, &#x27;hospital&#x27;].includes(claims.role)) return reject(401, &#x27;Unauthorized&#x27;);
+    wss.handleUpgrade(req, socket, head, (ws) =&gt; { ws.claims = claims; wss.emit(&#x27;connection&#x27;, ws, req); });
+  });</code></pre></figure>
+<figure><div class="label">server.js: heartbeat (ping/pong and application hb)</div><pre><code>  // ---------- 3. Heartbeat: detect half-open connections ----------
+  const timer = setInterval(() =&gt; {
+    for (const ws of wss.clients) {
+      if (!ws.isAlive) { ws.terminate(); continue; }                                  // no pong since last round -&gt; dead
+      ws.isAlive = false; ws.ping();
+      send(ws, { type: &#x27;hb&#x27;, t: Date.now() });                                        // lets browser code run its own watchdog
+    }
+  }, heartbeatMs);</code></pre></figure>
+<h2>C. WebSockets compared with polling, long polling and Server-Sent Events</h2>
+<div class="tw"><table><thead><tr><th>Technique</th><th>How it works</th><th>Direction</th><th>Latency and overhead</th><th>Suitable here?</th></tr></thead><tbody>
+<tr><td>Polling</td><td>Client sends a new HTTP request every N seconds</td><td>Client to server (request/response)</td><td>Delay up to N seconds; most replies are empty; full HTTP headers every time</td><td>No: too slow and wasteful</td></tr>
+<tr><td>Long polling</td><td>Request is held open until data exists, then the client immediately asks again</td><td>Server pushes one message per request</td><td>Low delay for the first event but a new request and headers for every message; many open requests</td><td>Fallback only</td></tr>
+<tr><td>Server-Sent Events (SSE)</td><td>One long-lived HTTP response; server streams <code>text/event-stream</code>; automatic reconnect with <code>Last-Event-ID</code></td><td>Server to client only</td><td>Low delay, small overhead, works through ordinary HTTP proxies; text only; limited number of connections per browser over HTTP/1.1</td><td>Good for the dashboard side only</td></tr>
+<tr><td>WebSocket</td><td>Upgraded TCP connection with framing</td><td>Both directions (full-duplex)</td><td>Lowest delay and overhead; binary or text</td><td><strong>Yes</strong>: ambulance uploads and dashboard receives on one protocol</td></tr>
+</tbody></table></div>
+<p><strong>Conclusion.</strong> The ambulance must <strong>send</strong> data and the hospital must <strong>receive and also send</strong> control messages (subscribe, resume), so WebSocket is the best fit. SSE would be a reasonable choice if the dashboard only needed to receive and proxies blocked WebSockets; polling and long polling are fallbacks for restricted networks.</p>
+<h2>D. 5G features that matter for web applications</h2>
+<div class="tw"><table><thead><tr><th>5G feature</th><th>Meaning</th><th>Use in this system</th></tr></thead><tbody>
+<tr><td>eMBB (enhanced mobile broadband)</td><td>Very high data rates and capacity</td><td>Live video from the ambulance, ultrasound or ECG images, map tiles for the paramedics&#x27; tablet</td></tr>
+<tr><td>URLLC (ultra-reliable low-latency communication)</td><td>Design target of about 1 ms radio latency with very high reliability (99.999 %)</td><td>Vital-sign alarms and positions; remote guidance. Real end-to-end delay is higher because it includes the core network, the edge and the application</td></tr>
+<tr><td>mMTC (massive machine-type communication)</td><td>Very many low-power devices per area</td><td>Many wearable sensors and equipment trackers; fleet-wide telemetry</td></tr>
+<tr><td>Network slicing</td><td>Separate virtual networks with their own guarantees on the same infrastructure</td><td>A dedicated, prioritised emergency slice keeps ambulance traffic fast even when the stadium is crowded</td></tr>
+</tbody></table></div>
+<p>These are standard design targets; what a particular operator delivers depends on spectrum, coverage, the core network and agreements. The system must therefore also work, with higher delay, on 4G or Wi-Fi.</p>
+<h2>E. Role of edge computing and multi-access edge computing (MEC)</h2>
+<p><strong>Edge computing</strong> runs software near where data is produced instead of in a distant cloud. <strong>MEC</strong> is the telecom-standard form: compute and storage are placed inside or next to the mobile operator&#x27;s radio and core network, so traffic from the ambulance can be processed without leaving the local network.</p>
+<ul>
+<li><strong>Latency:</strong> fewer network hops; critical-alert rules and the WebSocket gateway run within the city.</li>
+<li><strong>Bandwidth and cost:</strong> the edge filters and summarises raw readings (for example one alert instead of 100 identical values) before sending to the cloud.</li>
+<li><strong>Resilience:</strong> the edge keeps relaying data and alerts if the link to the central cloud is slow or down.</li>
+<li><strong>Privacy and compliance:</strong> patient data can stay in the region and only the necessary data is stored centrally.</li>
+<li><strong>Drawbacks:</strong> many small sites to operate and secure, less capacity than the cloud, and the need to synchronise state with the cloud.</li>
+</ul>
+<div class="tw"><table><thead><tr><th>Stage</th><th>Illustrative delay budget (design assumption, not a measurement)</th></tr></thead><tbody>
+<tr><td>Sensor to modem, encoding</td><td>1–2 ms</td></tr>
+<tr><td>5G radio and core (URLLC slice)</td><td>5–10 ms</td></tr>
+<tr><td>Processing at the MEC (parse, validate, rules, broadcast)</td><td>1–3 ms</td></tr>
+<tr><td>Link from the edge to the hospital browser</td><td>5–15 ms</td></tr>
+<tr><td>Browser rendering</td><td>about 5 ms</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>roughly 20–35 ms</strong>; going through a distant cloud would add the round trip to that region</td></tr>
+</tbody></table></div>
+<h2>F. Issues: reconnection, scaling, security and privacy</h2>
+<div class="tw"><table><thead><tr><th>Issue</th><th>Problem</th><th>Measures (and where they are in the code)</th></tr></thead><tbody>
+<tr><td>Reconnection</td><td>Mobile networks drop often; reconnecting all clients at once overloads the server</td><td>Automatic reconnect with <strong>exponential back-off and jitter</strong> (500 ms doubling to 30 s, randomised) in <code>index.html</code>; each event has a sequence number; on reconnect the client sends <code>resume</code> with its last number and the server replays what it missed from a buffer; a snapshot of the latest position is sent to new viewers; heartbeat watchdog detects dead links</td></tr>
+<tr><td>Scaling of connections</td><td>Each connection uses memory and a file descriptor; one server cannot hold all</td><td>Stateless gateway nodes behind a load balancer that supports WebSocket; raise OS limits; a publish/subscribe broker (Redis, NATS or Kafka) fans events out between nodes so a hospital client can connect to any node; edge nodes per city; <strong>back-pressure</strong>: when a client is slow the server drops old positions (latest wins) but keeps alerts; per-connection rate limit (30 msg/s) and 4 KB maximum message size</td></tr>
+<tr><td>Transport security</td><td>Data can be read or changed on the way</td><td><strong>WSS</strong> (WebSocket over TLS 1.2+ or 1.3) only; <code>ws://</code> is used in the demo only and the server prints a warning; HSTS and certificate management at the edge</td></tr>
+<tr><td>Authentication and authorisation</td><td>Anyone could connect or publish false data</td><td>Short-lived signed token sent in the handshake sub-protocol (not in the URL, which would appear in logs); verified <strong>before</strong> the upgrade (401 if missing, forged or expired); roles: *ambulance* may publish, *hospital* may only subscribe; the ambulance identity is taken from the token, so a message cannot pretend to come from another ambulance (tested)</td></tr>
+<tr><td>Origin checks</td><td>Cross-Site WebSocket Hijacking: a malicious web page uses the user&#x27;s logged-in browser to open a socket</td><td><code>Origin</code> header compared with an allow-list during the handshake (403 otherwise); tokens instead of ambient cookies; non-browser clients (ambulance units) authenticate with tokens and certificates</td></tr>
+<tr><td>Input validation</td><td>Malformed or oversized messages, injection into the dashboard</td><td>JSON parse inside try/catch, numeric range checks, message size limit (closing code 1009), rate limit (1008); the page writes data with <code>textContent</code>, never <code>innerHTML</code>; error handler on every socket so bad frames cannot crash the process (found by the automated test)</td></tr>
+<tr><td>Data privacy</td><td>Vital signs and locations are sensitive health data</td><td>Data minimisation (pseudonymous trip or ambulance id, no names in the stream); TLS in transit; no payloads in logs; role-based access and an access log; encryption at rest and defined retention in the cloud store; data kept in the region where required by law; the edge buffer holds only minutes of data</td></tr>
+</tbody></table></div>
+<h2>G. Test results</h2>
+<figure><div class="label">Output of npm test (Node.js 22, ws 8.23; everything ran on one machine)</div><pre><code>PASS foreign Origin rejected  HTTP 403
+PASS forged token rejected  HTTP 401
+PASS expired token rejected  HTTP 401
+PASS relay latency (localhost)  median 1.53 ms, p95 2.15 ms (excludes real network)
+PASS identity comes from token (spoof ignored)
+PASS invalid vitals rejected
+PASS critical SpO2 flagged as alert
+PASS oversized frame closes socket (1009)
+PASS hospital role cannot publish
+PASS missed events replayed after reconnect
+PASS unresponsive client terminated by heartbeat  close code 1006
+PASS message flood closed (1008)
+
+all checks passed</code></pre></figure>
+<p>The measured relay time of about 1.5 ms (median) is the cost of the server code alone on localhost. It does <strong>not</strong> include radio, core network or distance, so it shows that the software adds very little to the budget above, not that the end-to-end target is met. The dashboard page was served and its code reviewed but it was not opened in a real browser, and WSS was not exercised during these tests.</p>
+<h2>H. Justification of the choices</h2>
+<p><strong>WebSocket over WSS</strong> carries both directions with the lowest overhead and is supported by browsers. <strong>5G with a URLLC/emergency slice</strong> gives the moving ambulance prioritised, low-delay access that public networks cannot guarantee. <strong>MEC</strong> hosts the gateway and alert rules near the ambulance for the delay budget, while <strong>cloud or hospital data centres</strong> hold the durable, regulated data. The weak points are operator dependence (coverage, slice availability) and operating many edge sites; both are reduced by a fallback to 4G/Wi-Fi, automatic reconnection with replay, and local alarms in the ambulance that do not depend on the network.</p>
+
+<nav><a href="a5_q3_library_soap_service.html">&larr; Question 3</a><a href="a5_q5_blockchain_records.html">Question 5 &rarr;</a></nav>
+</main></body></html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 5 - Q2: Describing and testing a SOAP service (WSDL)</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 5</span></div>
+<div class="q"><strong>Question 2.</strong> A university offers a web service that returns a student&#x27;s semester result when the register number is supplied. Explain how this service is described and tested. Describe the structure of a WSDL document (types, message, portType, operation, binding, service and port), the document/literal and RPC styles of binding, and the role of XML Schema in the types section; write a WSDL outline for the operation getStudentResult with its input and output messages and a fault. Explain how the service is tested with tools such as SoapUI or Postman (valid requests, invalid register numbers, missing fields, SOAP faults, response time and security checks), and analyse the advantages and drawbacks of the WSDL-first approach compared with the code-first approach.<div class="meta">Marks (10) &nbsp; (CO5) &nbsp; (BL4)</div></div>
+<h1>ANSWER 2 – Describing and testing the student-result web service</h1>
+<p><strong>Idea.</strong> A SOAP service is described by a <strong>WSDL</strong> document, a machine-readable contract that tells any client what operations exist, what messages they exchange, which protocol and encoding are used and where the service is located. Because the contract is precise, clients can be generated from it and the service can be tested systematically.</p>
+<h2>A. Structure of a WSDL document</h2>
+<div class="tw"><table><thead><tr><th>Element</th><th>What it describes</th><th>In <code>student_result.wsdl</code></th></tr></thead><tbody>
+<tr><td><code>types</code></td><td>The data types, written in XML Schema (XSD)</td><td><code>RegisterNumberType</code>, <code>SemesterType</code>, <code>GradeType</code>, <code>SubjectResultType</code> and the root elements <code>getStudentResult</code>, <code>getStudentResultResponse</code>, <code>ResultFault</code></td></tr>
+<tr><td><code>message</code></td><td>The abstract data that is sent or received; each part refers to a type or element</td><td><code>GetStudentResultInput</code>, <code>GetStudentResultOutput</code>, <code>ResultFaultMessage</code></td></tr>
+<tr><td><code>portType</code></td><td>The abstract interface: a set of operations (like a class interface)</td><td><code>StudentResultPortType</code></td></tr>
+<tr><td><code>operation</code></td><td>One callable action with <code>input</code>, <code>output</code> and optional <code>fault</code> messages</td><td><code>getStudentResult</code> (input, output, fault <code>ResultFault</code>)</td></tr>
+<tr><td><code>binding</code></td><td>How the interface is carried: protocol (SOAP 1.1), transport (HTTP), style and encoding (document/literal)</td><td><code>StudentResultBinding</code> with <code>soap:binding style=&quot;document&quot;</code></td></tr>
+<tr><td><code>service</code></td><td>A group of ports; the deployed service</td><td><code>StudentResultService</code></td></tr>
+<tr><td><code>port</code></td><td>One endpoint: a binding plus a network address</td><td><code>StudentResultPort</code>, <code>soap:address location=&quot;http://127.0.0.1:8083/server.php&quot;</code></td></tr>
+</tbody></table></div>
+<p>The first three (<code>types</code>, <code>message</code>, <code>portType</code>) are the <strong>abstract</strong> part (&quot;what&quot;); <code>binding</code>, <code>service</code> and <code>port</code> are the <strong>concrete</strong> part (&quot;how and where&quot;). The address can be changed without touching the interface.</p>
+<h2>B. Binding styles: document/literal and RPC</h2>
+<div class="tw"><table><thead><tr><th>Aspect</th><th>Document/literal</th><th>RPC (rpc/encoded or rpc/literal)</th></tr></thead><tbody>
+<tr><td>Body content</td><td>The body holds an XML document that follows a schema element</td><td>The body holds an element named after the operation, containing one child per parameter</td></tr>
+<tr><td>Message parts</td><td><code>part</code> uses <code>element=&quot;...&quot;</code></td><td><code>part</code> uses <code>type=&quot;...&quot;</code></td></tr>
+<tr><td>Validation</td><td>The whole body can be validated against the XSD</td><td>Only parameters are typed; the wrapper is not in the schema</td></tr>
+<tr><td>Interoperability</td><td>Recommended by WS-I (document/literal wrapped is the common form); the style used here</td><td>rpc/encoded is not WS-I compliant and is rarely used today; rpc/literal is simpler but less flexible</td></tr>
+<tr><td>Operation name in the message</td><td>Not guaranteed unless &quot;wrapped&quot; (root element named like the operation)</td><td>Always present</td></tr>
+<tr><td>Evolution</td><td>Easier: add optional elements to the schema</td><td>Harder: changes alter parameters</td></tr>
+</tbody></table></div>
+<figure><div class="label">The two styles side by side</div><pre><code>&lt;!-- document/literal (wrapped) - used in this service --&gt;
+&lt;message name=&quot;GetStudentResultInput&quot;&gt;&lt;part name=&quot;parameters&quot; element=&quot;tns:getStudentResult&quot;/&gt;&lt;/message&gt;
+&lt;soap:binding style=&quot;document&quot; transport=&quot;http://schemas.xmlsoap.org/soap/http&quot;/&gt;
+&lt;soap:body use=&quot;literal&quot;/&gt;
+
+&lt;!-- RPC/literal - the alternative --&gt;
+&lt;message name=&quot;GetStudentResultInput&quot;&gt;&lt;part name=&quot;registerNumber&quot; type=&quot;xsd:string&quot;/&gt;&lt;part name=&quot;semester&quot; type=&quot;xsd:int&quot;/&gt;&lt;/message&gt;
+&lt;soap:binding style=&quot;rpc&quot; transport=&quot;http://schemas.xmlsoap.org/soap/http&quot;/&gt;
+&lt;soap:body use=&quot;literal&quot; namespace=&quot;urn:university:results&quot;/&gt;</code></pre></figure>
+<h2>C. Role of XML Schema in the types section</h2>
+<ul>
+<li><strong>Data contract:</strong> every element, its order, its type and how many times it may occur are defined once and shared by all clients.</li>
+<li><strong>Restrictions:</strong> the register number must match the pattern <code>[0-9]{9}</code>, the semester must be between 1 and 8 (<code>minInclusive</code>/<code>maxInclusive</code>) and the grade must come from an enumeration (O, A+, A, B+, B, C, U).</li>
+<li><strong>Reuse and structure:</strong> named simple and complex types (<code>SubjectResultType</code>) are reused; <code>maxOccurs=&quot;unbounded&quot;</code> allows any number of subjects.</li>
+<li><strong>Tooling:</strong> stub generators (<code>wsimport</code>, <code>wsdl2java</code>, .NET <code>svcutil</code>) build typed classes from the schema; SoapUI creates sample requests from it; a validating parser can check any message.</li>
+<li><strong>Caution:</strong> a SOAP server does not automatically enforce the schema. In the PHP service the same rules are repeated in code (<code>preg_match</code>, range checks), which is also needed for security.</li>
+</ul>
+<h2>D. WSDL outline for getStudentResult</h2>
+<figure><div class="label">student_result.wsdl</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;definitions name=&quot;StudentResultService&quot;
+    targetNamespace=&quot;urn:university:results&quot;
+    xmlns=&quot;http://schemas.xmlsoap.org/wsdl/&quot;
+    xmlns:tns=&quot;urn:university:results&quot;
+    xmlns:xsd=&quot;http://www.w3.org/2001/XMLSchema&quot;
+    xmlns:soap=&quot;http://schemas.xmlsoap.org/wsdl/soap/&quot;&gt;
+
+  &lt;!-- 1. TYPES: the data contract, written in XML Schema --&gt;
+  &lt;types&gt;
+    &lt;xsd:schema targetNamespace=&quot;urn:university:results&quot; elementFormDefault=&quot;qualified&quot;&gt;
+
+      &lt;xsd:simpleType name=&quot;RegisterNumberType&quot;&gt;
+        &lt;xsd:restriction base=&quot;xsd:string&quot;&gt;&lt;xsd:pattern value=&quot;[0-9]{9}&quot;/&gt;&lt;/xsd:restriction&gt;
+      &lt;/xsd:simpleType&gt;
+      &lt;xsd:simpleType name=&quot;SemesterType&quot;&gt;
+        &lt;xsd:restriction base=&quot;xsd:int&quot;&gt;&lt;xsd:minInclusive value=&quot;1&quot;/&gt;&lt;xsd:maxInclusive value=&quot;8&quot;/&gt;&lt;/xsd:restriction&gt;
+      &lt;/xsd:simpleType&gt;
+      &lt;xsd:simpleType name=&quot;GradeType&quot;&gt;
+        &lt;xsd:restriction base=&quot;xsd:string&quot;&gt;
+          &lt;xsd:enumeration value=&quot;O&quot;/&gt;&lt;xsd:enumeration value=&quot;A+&quot;/&gt;&lt;xsd:enumeration value=&quot;A&quot;/&gt;
+          &lt;xsd:enumeration value=&quot;B+&quot;/&gt;&lt;xsd:enumeration value=&quot;B&quot;/&gt;&lt;xsd:enumeration value=&quot;C&quot;/&gt;&lt;xsd:enumeration value=&quot;U&quot;/&gt;
+        &lt;/xsd:restriction&gt;
+      &lt;/xsd:simpleType&gt;
+
+      &lt;xsd:complexType name=&quot;SubjectResultType&quot;&gt;
+        &lt;xsd:sequence&gt;
+          &lt;xsd:element name=&quot;code&quot;    type=&quot;xsd:string&quot;/&gt;
+          &lt;xsd:element name=&quot;name&quot;    type=&quot;xsd:string&quot;/&gt;
+          &lt;xsd:element name=&quot;credits&quot; type=&quot;xsd:int&quot;/&gt;
+          &lt;xsd:element name=&quot;grade&quot;   type=&quot;tns:GradeType&quot;/&gt;
+        &lt;/xsd:sequence&gt;
+      &lt;/xsd:complexType&gt;
+
+      &lt;!-- wrapped document/literal: request and response are single root elements --&gt;
+      &lt;xsd:element name=&quot;getStudentResult&quot;&gt;
+        &lt;xsd:complexType&gt;
+          &lt;xsd:sequence&gt;
+            &lt;xsd:element name=&quot;registerNumber&quot; type=&quot;tns:RegisterNumberType&quot;/&gt;
+            &lt;xsd:element name=&quot;semester&quot;       type=&quot;tns:SemesterType&quot;/&gt;
+          &lt;/xsd:sequence&gt;
+        &lt;/xsd:complexType&gt;
+      &lt;/xsd:element&gt;
+      &lt;xsd:element name=&quot;getStudentResultResponse&quot;&gt;
+        &lt;xsd:complexType&gt;
+          &lt;xsd:sequence&gt;
+            &lt;xsd:element name=&quot;registerNumber&quot; type=&quot;tns:RegisterNumberType&quot;/&gt;
+            &lt;xsd:element name=&quot;studentName&quot;    type=&quot;xsd:string&quot;/&gt;
+            &lt;xsd:element name=&quot;semester&quot;       type=&quot;tns:SemesterType&quot;/&gt;
+            &lt;xsd:element name=&quot;subject&quot;        type=&quot;tns:SubjectResultType&quot; maxOccurs=&quot;unbounded&quot;/&gt;
+            &lt;xsd:element name=&quot;gpa&quot;            type=&quot;xsd:decimal&quot;/&gt;
+            &lt;xsd:element name=&quot;status&quot;         type=&quot;xsd:string&quot;/&gt;
+          &lt;/xsd:sequence&gt;
+        &lt;/xsd:complexType&gt;
+      &lt;/xsd:element&gt;
+      &lt;xsd:element name=&quot;ResultFault&quot;&gt;
+        &lt;xsd:complexType&gt;
+          &lt;xsd:sequence&gt;
+            &lt;xsd:element name=&quot;code&quot;    type=&quot;xsd:string&quot;/&gt;
+            &lt;xsd:element name=&quot;message&quot; type=&quot;xsd:string&quot;/&gt;
+          &lt;/xsd:sequence&gt;
+        &lt;/xsd:complexType&gt;
+      &lt;/xsd:element&gt;
+    &lt;/xsd:schema&gt;
+  &lt;/types&gt;
+
+  &lt;!-- 2. MESSAGES: what is sent and received --&gt;
+  &lt;message name=&quot;GetStudentResultInput&quot;&gt;&lt;part name=&quot;parameters&quot; element=&quot;tns:getStudentResult&quot;/&gt;&lt;/message&gt;
+  &lt;message name=&quot;GetStudentResultOutput&quot;&gt;&lt;part name=&quot;parameters&quot; element=&quot;tns:getStudentResultResponse&quot;/&gt;&lt;/message&gt;
+  &lt;message name=&quot;ResultFaultMessage&quot;&gt;&lt;part name=&quot;fault&quot; element=&quot;tns:ResultFault&quot;/&gt;&lt;/message&gt;
+
+  &lt;!-- 3. PORT TYPE: the abstract interface (operations) --&gt;
+  &lt;portType name=&quot;StudentResultPortType&quot;&gt;
+    &lt;operation name=&quot;getStudentResult&quot;&gt;
+      &lt;input  message=&quot;tns:GetStudentResultInput&quot;/&gt;
+      &lt;output message=&quot;tns:GetStudentResultOutput&quot;/&gt;
+      &lt;fault  name=&quot;ResultFault&quot; message=&quot;tns:ResultFaultMessage&quot;/&gt;
+    &lt;/operation&gt;
+  &lt;/portType&gt;
+
+  &lt;!-- 4. BINDING: protocol and encoding (SOAP 1.1 over HTTP, document/literal) --&gt;
+  &lt;binding name=&quot;StudentResultBinding&quot; type=&quot;tns:StudentResultPortType&quot;&gt;
+    &lt;soap:binding style=&quot;document&quot; transport=&quot;http://schemas.xmlsoap.org/soap/http&quot;/&gt;
+    &lt;operation name=&quot;getStudentResult&quot;&gt;
+      &lt;soap:operation soapAction=&quot;urn:university:results#getStudentResult&quot;/&gt;
+      &lt;input&gt;&lt;soap:body use=&quot;literal&quot;/&gt;&lt;/input&gt;
+      &lt;output&gt;&lt;soap:body use=&quot;literal&quot;/&gt;&lt;/output&gt;
+      &lt;fault name=&quot;ResultFault&quot;&gt;&lt;soap:fault name=&quot;ResultFault&quot; use=&quot;literal&quot;/&gt;&lt;/fault&gt;
+    &lt;/operation&gt;
+  &lt;/binding&gt;
+
+  &lt;!-- 5. SERVICE and PORT: where the service lives --&gt;
+  &lt;service name=&quot;StudentResultService&quot;&gt;
+    &lt;port name=&quot;StudentResultPort&quot; binding=&quot;tns:StudentResultBinding&quot;&gt;
+      &lt;soap:address location=&quot;http://127.0.0.1:8083/server.php&quot;/&gt;
+    &lt;/port&gt;
+  &lt;/service&gt;
+&lt;/definitions&gt;</code></pre></figure>
+<h2>E. The service and a client built from the WSDL</h2>
+<figure><div class="label">server.php (operation implementation with validation and faults)</div><pre><code>final class ResultService
+{
+    /** Demo data. A real service reads these rows from the university database with PDO. */
+    private const DB = [
+        &#x27;192311234&#x27; =&gt; [&#x27;name&#x27; =&gt; &#x27;Anitha R&#x27;, &#x27;sem&#x27; =&gt; [5 =&gt; [
+            [&#x27;CSA4307&#x27;, &#x27;Internet Programming&#x27;, 4, &#x27;A+&#x27;], [&#x27;CSA4301&#x27;, &#x27;Computer Networks&#x27;, 4, &#x27;A&#x27;],
+            [&#x27;CSA4305&#x27;, &#x27;Operating Systems&#x27;, 3, &#x27;B+&#x27;]]]],
+        &#x27;192311999&#x27; =&gt; [&#x27;name&#x27; =&gt; &#x27;Karthik S&#x27;, &#x27;sem&#x27; =&gt; [5 =&gt; [
+            [&#x27;CSA4307&#x27;, &#x27;Internet Programming&#x27;, 4, &#x27;U&#x27;], [&#x27;CSA4301&#x27;, &#x27;Computer Networks&#x27;, 4, &#x27;C&#x27;]]]],
+    ];
+    private const POINTS = [&#x27;O&#x27; =&gt; 10, &#x27;A+&#x27; =&gt; 9, &#x27;A&#x27; =&gt; 8, &#x27;B+&#x27; =&gt; 7, &#x27;B&#x27; =&gt; 6, &#x27;C&#x27; =&gt; 5, &#x27;U&#x27; =&gt; 0];
+
+    public function getStudentResult(object $p): array
+    {
+        $reg = $p-&gt;registerNumber ?? null;
+        $sem = $p-&gt;semester ?? null;
+        if ($reg === null || $reg === &#x27;&#x27; || $sem === null || $sem === &#x27;&#x27;) {
+            throw new SoapFault(&#x27;Client&#x27;, &#x27;ERR_MISSING_FIELD: registerNumber and semester are required&#x27;);
+        }
+        if (!is_string($reg) || preg_match(&#x27;/^[0-9]{9}\z/&#x27;, $reg) !== 1) {
+            throw new SoapFault(&#x27;Client&#x27;, &#x27;ERR_INVALID_REGNO: register number must be exactly 9 digits&#x27;);
+        }
+        if (!is_numeric($sem) || (int)$sem &lt; 1 || (int)$sem &gt; 8) {
+            throw new SoapFault(&#x27;Client&#x27;, &#x27;ERR_INVALID_SEMESTER: semester must be 1 to 8&#x27;);
+        }
+        $row = self::DB[$reg][&#x27;sem&#x27;][(int)$sem] ?? null;
+        if ($row === null) {
+            throw new SoapFault(&#x27;Client&#x27;, &#x27;ERR_NOT_FOUND: no result for this register number and semester&#x27;);
+        }
+        $credits = 0; $points = 0; $fail = false; $subjects = [];
+        foreach ($row as [$code, $name, $cr, $grade]) {
+            $subjects[] = [&#x27;code&#x27; =&gt; $code, &#x27;name&#x27; =&gt; $name, &#x27;credits&#x27; =&gt; $cr, &#x27;grade&#x27; =&gt; $grade];
+            $credits += $cr; $points += $cr * self::POINTS[$grade]; $fail = $fail || $grade === &#x27;U&#x27;;
+        }
+        return [&#x27;registerNumber&#x27; =&gt; $reg, &#x27;studentName&#x27; =&gt; self::DB[$reg][&#x27;name&#x27;], &#x27;semester&#x27; =&gt; (int)$sem,
+                &#x27;subject&#x27; =&gt; $subjects, &#x27;gpa&#x27; =&gt; round($points / $credits, 2), &#x27;status&#x27; =&gt; $fail ? &#x27;FAIL&#x27; : &#x27;PASS&#x27;];
+    }
+}</code></pre></figure>
+<figure><div class="label">server.php (security checks, then SoapServer)</div><pre><code>if (($_SERVER[&#x27;REQUEST_METHOD&#x27;] ?? &#x27;&#x27;) === &#x27;GET&#x27;) {            // publish the WSDL
+    if (isset($_GET[&#x27;wsdl&#x27;])) { header(&#x27;Content-Type: text/xml; charset=UTF-8&#x27;); readfile(__DIR__ . &#x27;/student_result.wsdl&#x27;); exit; }
+    http_response_code(405); exit;
+}
+
+// ---- security checks before any SOAP processing ----
+$key = $_SERVER[&#x27;HTTP_X_API_KEY&#x27;] ?? &#x27;&#x27;;
+if (!hash_equals(hash(&#x27;sha256&#x27;, &#x27;univ-demo-key&#x27;), hash(&#x27;sha256&#x27;, $key))) {
+    soap_fail(&#x27;Client&#x27;, &#x27;ERR_UNAUTHORIZED: valid X-Api-Key header required&#x27;, 401);
+}
+$raw = file_get_contents(&#x27;php://input&#x27;, false, null, 0, 16385);
+if (strlen($raw) &gt; 16384) { soap_fail(&#x27;Client&#x27;, &#x27;ERR_TOO_LARGE: request too large&#x27;, 413); }
+if (stripos($raw, &#x27;&lt;!DOCTYPE&#x27;) !== false || stripos($raw, &#x27;&lt;!ENTITY&#x27;) !== false) {   // blocks XXE / entity-expansion attacks
+    soap_fail(&#x27;Client&#x27;, &#x27;ERR_FORBIDDEN_XML: DTDs are not allowed&#x27;);
+}
+
+$server = new SoapServer(__DIR__ . &#x27;/student_result.wsdl&#x27;, [&#x27;cache_wsdl&#x27; =&gt; WSDL_CACHE_NONE]);
+$server-&gt;setObject(new ResultService());
+$server-&gt;handle($raw);</code></pre></figure>
+<figure><div class="label">client.php built from the WSDL (SoapClient)</div><pre><code>$ php client.php 192311234 5
+Anitha R (192311234) semester 5  GPA 8.09  PASS
+  CSA4307  Internet Programming     4 credits  A+
+  CSA4301  Computer Networks        4 credits  A
+  CSA4305  Operating Systems        3 credits  B+
+
+$ php client.php 1234 5
+SOAP FAULT [SOAP-ENV:Client]: ERR_INVALID_REGNO: register number must be exactly 9 digits</code></pre></figure>
+<h2>F. Testing with SoapUI and Postman</h2>
+<p><strong>SoapUI:</strong> File &gt; New SOAP Project &gt; enter the WSDL URL (<code>http://host/server.php?wsdl</code>). SoapUI reads the WSDL and creates a sample request for <code>getStudentResult</code>. Add a <strong>TestSuite</strong> with one test case per scenario below, and attach assertions: *Not SOAP Fault* (valid case), *SOAP Fault* (error cases), *XPath Match* (for example <code>//ns1:gpa</code> exists), *Schema Compliance* (response matches the WSDL), *Contains* (error code text) and *Response SLA* (for example under 500 ms). A <strong>LoadTest</strong> with several threads checks response time under load, and the *Security Test* feature adds XML bomb, SQL-injection and oversized-request scans. <strong>Postman:</strong> create a POST request to the endpoint, set <code>Content-Type: text/xml</code>, <code>SOAPAction</code> and the API-key header, paste the SOAP envelope in the raw body, and write tests in JavaScript (<code>pm.test</code>, <code>pm.response.to.have.status</code>, <code>pm.response.responseTime</code>). The delivered <code>postman_collection.json</code> contains these requests with tests.</p>
+<div class="tw"><table><thead><tr><th>Test</th><th>Input</th><th>Expected</th><th>Result (run on the service)</th></tr></thead><tbody>
+<tr><td>Valid request</td><td>192311234, semester 5</td><td>200 + result with GPA and status</td><td>PASS, 200, about 1 ms</td></tr>
+<tr><td>Invalid register number</td><td><code>ABC123</code></td><td>SOAP Fault <code>ERR_INVALID_REGNO</code></td><td>PASS, fault returned (HTTP 500)</td></tr>
+<tr><td>Missing field</td><td>semester omitted</td><td>Fault <code>ERR_MISSING_FIELD</code></td><td>PASS, fault returned</td></tr>
+<tr><td>Unknown student</td><td>192319999</td><td>Fault <code>ERR_NOT_FOUND</code></td><td>PASS, fault returned</td></tr>
+<tr><td>Semester out of range</td><td>semester 12</td><td>Fault <code>ERR_INVALID_SEMESTER</code></td><td>PASS, fault returned</td></tr>
+<tr><td>XML external entity (security)</td><td>DOCTYPE with <code>file:///etc/passwd</code></td><td>Rejected, nothing disclosed</td><td>PASS, <code>ERR_FORBIDDEN_XML</code></td></tr>
+<tr><td>No API key (security)</td><td>header missing</td><td>401</td><td>PASS, 401</td></tr>
+<tr><td>Wrong API key (security)</td><td>guessed key</td><td>401</td><td>PASS, 401</td></tr>
+</tbody></table></div>
+<figure><div class="label">tests/03_missing_field.xml (sample test message)</div><pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;soapenv:Envelope xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot; xmlns:res=&quot;urn:university:results&quot;&gt;
+  &lt;soapenv:Header/&gt;
+  &lt;soapenv:Body&gt;
+    &lt;res:getStudentResult&gt;
+      &lt;res:registerNumber&gt;192311234&lt;/res:registerNumber&gt;
+    &lt;/res:getStudentResult&gt;
+  &lt;/soapenv:Body&gt;
+&lt;/soapenv:Envelope&gt;</code></pre></figure>
+<figure><div class="label">Output of ./run_tests.sh (HTTP status and response time per test)</div><pre><code>PASS valid request          200 0.000975s
+PASS invalid register no.   500 0.000606s
+PASS missing field          500 0.000483s
+PASS unknown student        500 0.000506s
+PASS semester out of range  500 0.000423s
+PASS XXE attack blocked     200 0.000301s
+PASS no API key             401 0.000296s
+PASS wrong API key          401 0.000288s</code></pre></figure>
+<p><strong>Other checks to include:</strong> wrong HTTP method and wrong <code>SOAPAction</code>; very long values and a request larger than the limit (rejected before parsing); special characters (<code>&lt;</code>, <code>&amp;</code>) in the register number; repeated calls to check rate limiting; HTTPS only with a valid certificate; confirm the response never contains stack traces; and a load test for the response-time target. Because SOAP faults normally return HTTP 500, tests must assert on the fault content, not only on the status code. These response times were measured on one machine with a built-in server and do not represent production performance.</p>
+<h2>G. WSDL-first compared with code-first</h2>
+<div class="tw"><table><thead><tr><th>Aspect</th><th>WSDL-first (contract-first)</th><th>Code-first</th></tr></thead><tbody>
+<tr><td>Starting point</td><td>Design the WSDL/XSD, then generate server skeletons and client stubs</td><td>Write the classes, then generate the WSDL from annotations or reflection</td></tr>
+<tr><td>Interface control</td><td>Full control of names, types, namespaces and faults; stable contract</td><td>Contract depends on the framework and can change when code is refactored</td></tr>
+<tr><td>Interoperability</td><td>Better: types are chosen deliberately with other platforms in mind</td><td>Risk of language-specific types (maps, dates, collections) that other tools handle badly</td></tr>
+<tr><td>Team work</td><td>Teams (university, partner colleges, mobile developers) can agree on the contract first and work in parallel</td><td>Consumers must wait for the code</td></tr>
+<tr><td>Speed and effort</td><td>Slower start; WSDL/XSD must be written by hand or with a tool</td><td>Fast prototyping; little XML knowledge needed</td></tr>
+<tr><td>Maintenance</td><td>Changes start in the contract, so versions are explicit</td><td>Easy to break clients by accident</td></tr>
+<tr><td>Best for</td><td>Public or inter-organisation services that must last (results, billing)</td><td>Internal services and quick prototypes</td></tr>
+</tbody></table></div>
+<p><strong>Recommendation.</strong> For a university result service that colleges, mobile apps and other systems will rely on, use <strong>WSDL-first</strong>: design the contract (with the restrictions shown above), review it with the consumers, generate the skeleton, and keep the schema checks in code as a second layer of defence. Code-first is acceptable for an internal prototype.</p>
+
+<nav><a href="a5_q1_ai_triage_rest_soap.html">&larr; Question 1</a><a href="a5_q3_library_soap_service.html">Question 3 &rarr;</a></nav>
+</main></body></html>

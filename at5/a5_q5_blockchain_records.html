@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 5 - Q5: Blockchain for shared patient records</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 5</span></div>
+<div class="q"><strong>Question 5.</strong> Three hospitals and a diagnostic laboratory want to share patient records securely, give patients control over who can view their records, and keep a tamper-proof history of every access. Develop a design that integrates blockchain into the web services of the hospital network. Explain the role of blocks, hashes, consensus, smart contracts, and permissioned blockchains (for example, Hyperledger Fabric) compared with public blockchains; the decision to store only record hashes, consent and access logs on the blockchain while keeping the medical data off-chain in encrypted storage; and how REST web services connect the hospital web application to the blockchain and the database. Evaluate the design against confidentiality, integrity and availability, the conflict between immutability and the right to erasure under data-protection laws, scalability and cost, and key management, and recommend how these issues can be handled.<div class="meta">Marks (10) &nbsp; (CO5) &nbsp; (BL5)</div></div>
+<h1>ANSWER 5 – Blockchain-integrated web services for sharing patient records</h1>
+<p><strong>Idea.</strong> The hospitals and the laboratory need three things: (1) share records, (2) let the patient decide who may see them and (3) keep a history of every access that nobody can rewrite. A <strong>permissioned blockchain</strong> gives the shared, tamper-evident history. Medical data itself is <strong>not</strong> put on the chain: it stays in encrypted storage owned by the organisations, and the chain keeps only fingerprints (hashes), consent decisions and access events.</p>
+<figure><div class="label">Architecture</div><pre><code>Web app (hospital / lab / patient portal)
+        |  HTTPS + token
+        v
+REST web service ----------&gt; Off-chain encrypted store (AES-256-GCM, keys wrapped in KMS/HSM)
+        |                              ^
+        | hash of the encrypted        |  encrypted record
+        v record                       |
+Permissioned blockchain (peers: Hospital A, B, C, Lab X)
+   record hashes | consent | access log     &lt;- rules enforced by the smart contract</code></pre></figure>
+<h2>A. Blockchain concepts used</h2>
+<div class="tw"><table><thead><tr><th>Concept</th><th>Meaning</th><th>Use in this design</th></tr></thead><tbody>
+<tr><td>Block</td><td>A batch of transactions with a timestamp, the hash of the previous block and its own hash</td><td>Each registered record, consent change and access event is a transaction stored in a block</td></tr>
+<tr><td>Hash</td><td>A fixed-length fingerprint of data (SHA-256); any change to the data gives a completely different value and it cannot be reversed</td><td>Links blocks (changing an old block breaks every later link) and fingerprints each record so alteration of the stored file is detected</td></tr>
+<tr><td>Consensus</td><td>The rule by which the network agrees on which transactions are valid and in what order</td><td>Transactions must be <strong>endorsed</strong> by at least 2 of the 4 member organisations; an ordering service then puts them in a block; there is no mining</td></tr>
+<tr><td>Smart contract (chaincode)</td><td>Program that runs on the ledger and enforces rules automatically</td><td>Only a patient can grant or revoke consent for their own records; only clinicians register records; every access attempt (allowed or denied) is logged</td></tr>
+<tr><td>Digital signature</td><td>Proof that a message came from a key holder</td><td>Each organisation signs the transactions it endorses (ed25519 in the model)</td></tr>
+</tbody></table></div>
+<h2>B. Permissioned compared with public blockchains</h2>
+<div class="tw"><table><thead><tr><th>Aspect</th><th>Permissioned (Hyperledger Fabric)</th><th>Public (Bitcoin, Ethereum)</th></tr></thead><tbody>
+<tr><td>Who can join</td><td>Only identified, approved organisations (membership service, certificates)</td><td>Anyone, anonymously</td></tr>
+<tr><td>Consensus</td><td>Endorsement policy + ordering service (for example Raft); fast finality, no mining or gas</td><td>Proof-of-work or proof-of-stake; slower, confirmations needed</td></tr>
+<tr><td>Performance</td><td>Hundreds to thousands of transactions per second are typical in tuned deployments</td><td>Low throughput and variable delay</td></tr>
+<tr><td>Cost</td><td>Infrastructure and operating cost of the consortium; no per-transaction fee</td><td>Fees (gas) paid per transaction</td></tr>
+<tr><td>Privacy</td><td>Channels and private data collections restrict who sees data; identities are known</td><td>All data is visible to everyone; pseudonymous addresses</td></tr>
+<tr><td>Governance and compliance</td><td>The consortium controls membership, upgrades and who is liable; can follow health-data law</td><td>No central party to hold responsible; hard to meet legal duties</td></tr>
+<tr><td>Trust model</td><td>Participants trust each other only partly and verify through the ledger</td><td>Trust in the open network and its economics</td></tr>
+</tbody></table></div>
+<p>For hospitals that are legally responsible for patient data, a permissioned network is the right choice: known members, fast and free transactions, and control over visibility. A public chain would expose metadata to everyone and its costs and delays do not suit clinical work.</p>
+<h2>C. What goes on the chain and what stays off-chain</h2>
+<div class="tw"><table><thead><tr><th>Data</th><th>Where</th><th>Why</th></tr></thead><tbody>
+<tr><td>Medical content (diagnosis, reports, images)</td><td><strong>Off-chain</strong>, encrypted (AES-256-GCM) in each organisation&#x27;s store</td><td>Large, sensitive, must be correctable and erasable; a blockchain is permanent and replicated to all peers</td></tr>
+<tr><td>SHA-256 hash of the encrypted record</td><td><strong>On-chain</strong></td><td>Proves the stored file has not been altered; reveals nothing because it is the hash of random-looking ciphertext</td></tr>
+<tr><td>Consent (patient, organisation, purpose, expiry, revoked)</td><td><strong>On-chain</strong></td><td>Shared, enforced the same way by every hospital, and its history cannot be rewritten</td></tr>
+<tr><td>Access log (who, which record, purpose, allowed or denied, time)</td><td><strong>On-chain</strong></td><td>Tamper-proof history; the patient can inspect it</td></tr>
+<tr><td>Patient name, contact details, clinical text</td><td><strong>Never on-chain</strong></td><td>Cannot be deleted later; every peer would hold it</td></tr>
+</tbody></table></div>
+<p><strong>Envelope encryption.</strong> Each record gets its own random data key (DEK). The record is encrypted with the DEK using AES-256-GCM (which also detects tampering). The DEK is stored only in a wrapped (encrypted) form under a master key (KEK) that is held in a key-management service or hardware security module. The hash that goes on the chain is the hash of the encrypted package.</p>
+<figure><div class="label">offchain.js: encrypt, wrap the key, return the hash for the chain</div><pre><code>  /** @returns {string} SHA-256 of the ciphertext package: this is what goes on the chain */
+  put(recordId, plaintext) {
+    const dek = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(12);
+    const c = crypto.createCipheriv(&#x27;aes-256-gcm&#x27;, dek, iv);
+    const ct = Buffer.concat([c.update(plaintext, &#x27;utf8&#x27;), c.final()]);
+    const pkg = { iv: iv.toString(&#x27;base64&#x27;), tag: c.getAuthTag().toString(&#x27;base64&#x27;), ct: ct.toString(&#x27;base64&#x27;) };
+
+    const wiv = crypto.randomBytes(12);                                      // wrap the DEK with the KEK
+    const w = crypto.createCipheriv(&#x27;aes-256-gcm&#x27;, this.kek, wiv);
+    const wrapped = Buffer.concat([w.update(dek), w.final()]);
+    fs.writeFileSync(this.#p(&#x27;keys&#x27;, recordId), JSON.stringify({ iv: wiv.toString(&#x27;base64&#x27;), tag: w.getAuthTag().toString(&#x27;base64&#x27;), key: wrapped.toString(&#x27;base64&#x27;) }));
+    const text = JSON.stringify(pkg);
+    fs.writeFileSync(this.#p(&#x27;data&#x27;, recordId), text);
+    return sha256(text);
+  }</code></pre></figure>
+<figure><div class="label">offchain.js: erasure by destroying the key</div><pre><code>  /** CRYPTO-SHREDDING: destroy the key (and data). The hash on the chain can no longer be linked to any readable data. */
+  erase(recordId) {
+    for (const kind of [&#x27;keys&#x27;, &#x27;data&#x27;]) { try { fs.unlinkSync(this.#p(kind, recordId)); } catch { /* already gone */ } }
+  }
+}</code></pre></figure>
+<h2>D. REST web services between the web application, the database and the blockchain</h2>
+<div class="tw"><table><thead><tr><th>Method and URI</th><th>Who</th><th>What happens</th></tr></thead><tbody>
+<tr><td><code>POST /v1/records</code></td><td>Hospital or lab</td><td>Encrypts and stores the record off-chain; registers its hash on the chain; returns <code>201</code>, <code>recordId</code>, hash and block number</td></tr>
+<tr><td><code>GET /v1/records/{id}</code></td><td>Hospital or lab</td><td>Checks consent on the chain; <strong>records the access attempt</strong>; verifies the stored data against the on-chain hash; decrypts and returns it (or 403 / 409 / 410)</td></tr>
+<tr><td><code>POST /v1/patients/{id}/consents</code></td><td>The patient only</td><td>Grants an organisation access for a purpose and a number of days (a chain transaction)</td></tr>
+<tr><td><code>DELETE /v1/patients/{id}/consents/{org}</code></td><td>The patient only</td><td>Revokes consent (a chain transaction, <code>204</code>)</td></tr>
+<tr><td><code>GET /v1/records/{id}/audit</code></td><td>Patient or auditor</td><td>Returns every access event for the record from the ledger</td></tr>
+<tr><td><code>DELETE /v1/records/{id}/content</code></td><td>Patient or owner organisation</td><td>Right-to-erasure request: destroys the key and data (crypto-shredding), logs that erasure occurred</td></tr>
+<tr><td><code>GET /v1/ledger/verify</code></td><td>Any member</td><td>Recomputes all hashes and links; reports the first broken block</td></tr>
+</tbody></table></div>
+<ol>
+<li><strong>Reading a record:</strong> the web app calls <code>GET /v1/records/{id}</code> with the user&#x27;s token.</li>
+<li>The service reads the record entry from the ledger and asks the contract whether the caller&#x27;s organisation owns the record or holds an active consent from the patient.</li>
+<li>It writes an <strong>ACCESS</strong> transaction (allowed or denied) that the peers endorse and add to a block.</li>
+<li>If denied, it returns 403; the denied attempt remains visible to the patient.</li>
+<li>If allowed, it compares the hash of the stored package with the on-chain hash (mismatch means tampering: 409), then decrypts it and returns the content.</li>
+</ol>
+<figure><div class="label">api.js: read a record (consent, audit, integrity, decryption)</div><pre><code>      // GET /v1/records/:id  (consent check + integrity check + audit entry)
+      if (req.method === &#x27;GET&#x27; &amp;&amp; parts[1] === &#x27;records&#x27; &amp;&amp; parts.length === 3) {
+        const rec = contract.getRecord(parts[2]); if (!rec) return send(res, 404, { error: &#x27;not_found&#x27; });
+        const purpose = u.searchParams.get(&#x27;purpose&#x27;) || &#x27;treatment&#x27;;
+        const allowed = rec.ownerOrg === actor.org || contract.hasConsent(rec.patientId, actor.org);
+        contract.recordAccess(rec.recordId, actor.org, purpose, allowed, actor);          // denied attempts are logged too
+        if (!allowed) return send(res, 403, { error: &#x27;no_consent&#x27;, message: &#x27;Patient has not consented to this organisation&#x27; });
+        if (store.rawHash(rec.recordId) === null) return send(res, 410, { error: &#x27;erased&#x27;, message: &#x27;Content was erased; only the hash remains&#x27; });
+        if (store.rawHash(rec.recordId) !== rec.contentHash) return send(res, 409, { error: &#x27;integrity_failure&#x27;, message: &#x27;Stored data does not match the hash on the ledger&#x27; });
+        let content; try { content = store.get(rec.recordId); } catch { return send(res, 409, { error: &#x27;integrity_failure&#x27; }); }
+        return send(res, 200, { recordId: rec.recordId, patientId: rec.patientId, content });
+      }</code></pre></figure>
+<figure><div class="label">ledger.js: endorsement policy check, appending a block and verifying the chain</div><pre><code>  /** Validate endorsements (each signature must verify, orgs must be distinct members) then append a block. */
+  append(tx, endorsements) {
+    const digest = Ledger.txDigest(tx);
+    const good = new Set();
+    for (const e of endorsements) {
+      const key = this.members.get(e.org);
+      if (key &amp;&amp; crypto.verify(null, Buffer.from(digest, &#x27;hex&#x27;), key, Buffer.from(e.signature, &#x27;base64&#x27;))) good.add(e.org);
+    }
+    if (good.size &lt; this.minEndorsements) {
+      throw Object.assign(new Error(`endorsement policy not met (${good.size}/${this.minEndorsements})`), { code: &#x27;ENDORSEMENT&#x27; });
+    }
+    const prev = this.chain[this.chain.length - 1];
+    const block = this.#make(prev.index + 1, prev.hash, [{ ...tx, endorsedBy: [...good].sort() }]);
+    this.chain.push(block);
+    if (this.file) fs.writeFileSync(this.file, JSON.stringify(this.chain));
+    return block;
+  }
+
+  /** Re-compute every hash and link. Any edit to any old block is detected here. */
+  verify() {
+    for (let i = 0; i &lt; this.chain.length; i++) {
+      const { hash, ...body } = this.chain[i];
+      if (sha256(JSON.stringify(body)) !== hash) return { valid: false, brokenAt: i, reason: &#x27;block content changed&#x27; };
+      if (i &gt; 0 &amp;&amp; this.chain[i].prevHash !== this.chain[i - 1].hash) return { valid: false, brokenAt: i, reason: &#x27;link broken&#x27; };
+    }
+    return { valid: true, height: this.chain.length - 1 };
+  }</code></pre></figure>
+<figure><div class="label">contract.js: rules enforced by the smart contract</div><pre><code>  registerRecord(recordId, patientId, contentHash, actor) {
+    if (![&#x27;hospital&#x27;, &#x27;lab&#x27;].includes(actor.role)) throw Object.assign(new Error(&#x27;only hospitals/labs register records&#x27;), { code: &#x27;FORBIDDEN&#x27; });
+    if (this.getRecord(recordId)) throw Object.assign(new Error(&#x27;record already exists&#x27;), { code: &#x27;CONFLICT&#x27; });
+    return this.submit(&#x27;REGISTER_RECORD&#x27;, { recordId, patientId, contentHash }, actor);
+  }
+  grantConsent(patientId, orgId, purpose, days, actor) {
+    if (actor.role !== &#x27;patient&#x27; || actor.id !== patientId) throw Object.assign(new Error(&#x27;only the patient can grant consent&#x27;), { code: &#x27;FORBIDDEN&#x27; });
+    const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+    return this.submit(&#x27;GRANT_CONSENT&#x27;, { patientId, orgId, purpose, expiresAt }, actor);
+  }
+  revokeConsent(patientId, orgId, actor) {
+    if (actor.role !== &#x27;patient&#x27; || actor.id !== patientId) throw Object.assign(new Error(&#x27;only the patient can revoke consent&#x27;), { code: &#x27;FORBIDDEN&#x27; });
+    return this.submit(&#x27;REVOKE_CONSENT&#x27;, { patientId, orgId }, actor);
+  }</code></pre></figure>
+<h2>E. Evaluation against confidentiality, integrity and availability</h2>
+<div class="tw"><table><thead><tr><th>Property</th><th>How the design supports it</th><th>Weaknesses and remedies</th></tr></thead><tbody>
+<tr><td>Confidentiality</td><td>No medical data on the chain; AES-256-GCM encryption off-chain; consent enforced by the contract before any decryption; role checks; TLS between all components; Fabric channels or private data collections to limit who sees metadata</td><td>Metadata (who accessed what, when) is visible to members: use pseudonymous patient IDs and channels per consortium purpose. A compromised web service could read plaintext: use least privilege, separate service accounts and an HSM</td></tr>
+<tr><td>Integrity</td><td>Hash chain makes block edits detectable; endorsements from several organisations; hash of each encrypted record on the ledger; GCM authentication tag; signatures identify who acted</td><td>Tested: an edited block was detected, and altered off-chain data returned 409. Remaining risk: wrong data entered at the source (&quot;garbage in, immutable out&quot;): validate at entry and allow signed corrections that reference the original</td></tr>
+<tr><td>Availability</td><td>Every organisation runs peers and keeps a copy of the ledger; ordering service with several nodes (Raft); off-chain stores can be replicated and backed up</td><td>If fewer than the required organisations are online, new transactions stop (endorsement policy of 2 of 4 tolerates two being offline). Emergency &quot;break-glass&quot; access needs a documented fallback that is logged afterwards. Plan backups, monitoring and recovery drills</td></tr>
+</tbody></table></div>
+<h2>F. Immutability against the right to erasure</h2>
+<p><strong>The conflict.</strong> A blockchain is designed so that history cannot be changed, but data-protection laws (for example GDPR Article 17, India&#x27;s DPDP Act 2023 and similar rules) give people rights to correction and erasure. If personal data were written on the chain, erasure would be impossible.</p>
+<ul>
+<li><strong>Do not store personal data on-chain</strong> (the decision in section C). The chain holds only hashes, pseudonymous identifiers, consent and access events.</li>
+<li><strong>Crypto-shredding:</strong> to erase a record, destroy its data key and the encrypted file. The ciphertext can no longer be decrypted and the remaining hash cannot be linked to readable data. The test shows the record then returns 410 Gone while the ledger still verifies.</li>
+<li><strong>Hash design:</strong> hash the *encrypted* package (random nonce, so equal records give different hashes) rather than the plain text, so that dictionary guessing is not possible.</li>
+<li><strong>Corrections:</strong> write a new record version and register its hash; the old version is marked superseded or erased off-chain.</li>
+<li><strong>Open legal point:</strong> whether a hash can still count as personal data is debated and depends on the jurisdiction; the design reduces the risk (no readable data, key destroyed) but a legal review and a data-protection impact assessment are required. Medical-record retention laws may also <strong>require</strong> keeping records for a period, so erasure requests must be checked against them.</li>
+</ul>
+<figure><div class="label">Extract from the output of npm test (a teaching model in Node.js; not a Fabric network)</div><pre><code>PASS Hospital B without consent -&gt; 403
+PASS patient grants Hospital B consent
+PASS Hospital B with consent -&gt; 200 and correct plaintext
+PASS patient sees full audit trail  HospitalA:granted, HospitalB:DENIED, LabX:DENIED, HospitalB:granted
+PASS 1 endorsement &lt; policy of 2 -&gt; rejected
+PASS altered off-chain data detected (hash mismatch) -&gt; 409
+PASS edited block detected  broken at block 2: block content changed
+PASS erasure request (crypto-shredding)
+PASS content gone -&gt; 410
+PASS ledger still valid after erasure (only a hash remains)
+... all 21 checks passed (ledger height 11)</code></pre></figure>
+<h2>G. Scalability, cost and key management</h2>
+<div class="tw"><table><thead><tr><th>Issue</th><th>Problem</th><th>Recommendation</th></tr></thead><tbody>
+<tr><td>Scalability</td><td>Every access is a ledger transaction; endorsement and ordering add delay; the ledger grows forever</td><td>Keep payloads tiny (hash plus identifiers); store data off-chain; batch low-risk events; use several channels per purpose; tune block size and timeouts; archive old blocks and keep world-state small; read-only checks (consent lookup) can be queries that do not need ordering</td></tr>
+<tr><td>Cost</td><td>Running peers, ordering nodes, certificate authority, monitoring and skilled staff for 4 organisations; no per-transaction fee but real operating cost</td><td>Share the ordering service in the consortium; use managed blockchain services if allowed; start with a pilot on consent and audit only; compare with a conventional append-only audit database to justify the added trust</td></tr>
+<tr><td>Key management</td><td>Lost keys lock out data; stolen keys expose it; many key types (organisation identities, patient identities, data keys, master key)</td><td>Organisation keys in an HSM and certificates from the Fabric CA with rotation and revocation; patient identity via the portal login with strong authentication (patients do not manage raw private keys; the portal signs on their behalf after verification); per-record DEKs wrapped by a KEK in a KMS, with KEK rotation; separation of duties; backup and recovery of keys; documented break-glass procedure; audit all key use</td></tr>
+<tr><td>Operations and governance</td><td>Chaincode bugs are hard to correct; membership changes; disputes</td><td>Test and audit chaincode, versioned upgrades approved by the members, written consortium rules and an agreed process to add or remove a hospital</td></tr>
+</tbody></table></div>
+<h2>H. Recommendation</h2>
+<p>Use a <strong>permissioned Hyperledger Fabric network</strong> run by the three hospitals and the laboratory, with an endorsement policy of at least two organisations. Put only <strong>record hashes, consent and access events</strong> on the chain, keep <strong>encrypted medical data off-chain</strong> with per-record keys, and expose everything to the web application through <strong>authenticated REST services</strong> that check consent on the ledger, verify the hash and log every attempt. Handle erasure by <strong>crypto-shredding</strong>, protect keys with an HSM/KMS, and limit throughput and cost by keeping transactions small. Before go-live carry out a legal review and a data-protection impact assessment, run the chaincode through security testing and define break-glass access for emergencies. The Node.js code supplied is a teaching model of these ideas; the Fabric chaincode file is a reference sample that was not run on a Fabric network.</p>
+
+<nav><a href="a5_q4_websocket_5g_edge.html">&larr; Question 4</a><span></span></nav>
+</main></body></html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 5 - Q1: AI triage behind REST and SOAP</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 5</span></div>
+<div class="q"><strong>Question 1.</strong> A multi-speciality hospital plans to add an AI-powered patient-support service to its web portal. The service must classify the urgency of a patient&#x27;s symptom message (low, medium or high) using a trained AI model, return a suggested department, and be usable by the hospital&#x27;s mobile app (through a REST API) and by the legacy billing and appointment systems of partner clinics (through a SOAP API). Design the integration by explaining the architecture in which the AI model is deployed behind a web service; the REST design (resources, URIs, HTTP methods, JSON request and response, status codes, statelessness); the SOAP design (envelope, header, body, fault); and authentication and authorisation (API keys, OAuth 2.0 tokens, WS-Security). Compare REST and SOAP for this case, and analyse the issues of latency, rate limiting, input validation, privacy of patient data, model errors or bias, and API versioning, with the measures you would take for each.<div class="meta">Marks (10) &nbsp; (CO5) &nbsp; (BL5)</div></div>
+<h1>ANSWER 1 – AI-powered patient triage behind REST and SOAP web services</h1>
+<p><strong>Idea.</strong> The trained model is not called directly by any client. It is deployed behind a web service that checks identity, validates input, applies safety rules, records an audit trail and only then asks the model for a prediction. The same core logic is offered through two interfaces: <strong>REST/JSON</strong> for the mobile app and <strong>SOAP/XML</strong> for the legacy systems of partner clinics, so both receive identical answers.</p>
+<h2>A. Architecture: the AI model deployed behind a web service</h2>
+<figure><div class="label">Deployment view</div><pre><code>Mobile app (REST/JSON) -----+
+                            +--&gt; API gateway: TLS, authentication, rate limit, WAF
+Partner clinics (SOAP) -----+                       |
+                                                    v
+        Triage service: REST adapter + SOAP adapter -&gt; validation -&gt; safety rules -&gt; audit
+                         |                                        |
+                         v                                        v
+        Model server (private network)             Database (results only, no message text)
+        trained model, versioned                   + monitoring and alerts</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Component</th><th>Role</th><th>Why it is separate</th></tr></thead><tbody>
+<tr><td>API gateway / reverse proxy</td><td>TLS termination, authentication, rate limiting, request-size limits, logging</td><td>One place to enforce security for both REST and SOAP</td></tr>
+<tr><td>Triage service (PHP in the demo)</td><td>Two thin adapters (REST and SOAP) over one core: validate -&gt; classify -&gt; safety rules -&gt; store</td><td>Business rules are written once; interfaces can change without touching the model</td></tr>
+<tr><td>Model server</td><td>Hosts the trained classifier (for example ONNX Runtime, TensorFlow Serving or a Python service) and returns urgency, department and confidence</td><td>Scales independently (GPU nodes), can be upgraded or rolled back without changing clients, is never exposed to the internet</td></tr>
+<tr><td>Database</td><td>Stores request id, pseudonymous patient reference, result, model version, time</td><td>Audit and quality review; the symptom text itself is not stored (data minimisation)</td></tr>
+<tr><td>Monitoring</td><td>Latency, error rate, confidence distribution, urgency mix per model version</td><td>Detects model drift and outages early</td></tr>
+</tbody></table></div>
+<p>In the code, <code>classifier.php</code> defines a <code>Classifier</code> interface with two implementations: <code>KeywordClassifier</code> (a stand-in model so the service runs offline) and <code>HttpModelClient</code> (calls the real model server with a 2-second timeout). <code>apply_safety_rules()</code> wraps <strong>any</strong> model.</p>
+<figure><div class="label">core.php (shared by both interfaces; fails safe if the model is down)</div><pre><code>/** Shared by REST and SOAP so both interfaces give identical answers. */
+function run_triage(PDO $pdo, array $cfg, array $clean, string $client): array
+{
+    $model = $cfg[&#x27;model_url&#x27;] !== &#x27;&#x27; ? new HttpModelClient($cfg[&#x27;model_url&#x27;])
+                                      : new KeywordClassifier($cfg[&#x27;model_version&#x27;]);
+    try {
+        $r = apply_safety_rules($model-&gt;classify($clean[&#x27;message&#x27;]));
+    } catch (Throwable $e) {                                   // model down/slow: fail safe, never silently &quot;low&quot;
+        $r = apply_safety_rules([&#x27;urgency&#x27; =&gt; &#x27;medium&#x27;, &#x27;department&#x27; =&gt; &#x27;General Medicine&#x27;,
+                                 &#x27;confidence&#x27; =&gt; 0.0, &#x27;model_version&#x27; =&gt; &#x27;fallback&#x27;]);
+    }
+    $id = &#x27;tr_&#x27; . bin2hex(random_bytes(6));
+    $pdo-&gt;prepare(&#x27;INSERT INTO triage_requests VALUES (:id,:c,:p,:u,:d,:cf,:r,:m,:t)&#x27;)-&gt;execute([
+        &#x27;:id&#x27; =&gt; $id, &#x27;:c&#x27; =&gt; $client, &#x27;:p&#x27; =&gt; $clean[&#x27;patient_ref&#x27;], &#x27;:u&#x27; =&gt; $r[&#x27;urgency&#x27;], &#x27;:d&#x27; =&gt; $r[&#x27;department&#x27;],
+        &#x27;:cf&#x27; =&gt; $r[&#x27;confidence&#x27;], &#x27;:r&#x27; =&gt; (int)$r[&#x27;needs_human_review&#x27;], &#x27;:m&#x27; =&gt; $r[&#x27;model_version&#x27;],
+        &#x27;:t&#x27; =&gt; gmdate(&#x27;c&#x27;)]);
+    return [&#x27;id&#x27; =&gt; $id] + $r;
+}</code></pre></figure>
+<h2>B. REST design</h2>
+<div class="tw"><table><thead><tr><th>Method and URI</th><th>Purpose</th><th>Success</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>POST /v1/triage-requests</code></td><td>Submit a symptom message; creates a triage request resource</td><td><code>201 Created</code> + <code>Location</code> header</td><td>Not idempotent; body is JSON</td></tr>
+<tr><td><code>GET /v1/triage-requests/{id}</code></td><td>Read an earlier result</td><td><code>200 OK</code></td><td>A client can read only its own requests</td></tr>
+<tr><td><code>GET /v1/health</code></td><td>Liveness check for the load balancer</td><td><code>200 OK</code></td><td>No authentication, no data</td></tr>
+</tbody></table></div>
+<p>Resources are nouns (<code>triage-requests</code>), the HTTP method gives the action, and the version is in the URI (<code>/v1</code>). <strong>Statelessness:</strong> every request carries its own credentials (<code>X-API-Key</code> or <code>Authorization: Bearer ...</code>) and everything the server needs; no session is kept between calls, so any server instance can answer and the service scales horizontally behind a load balancer.</p>
+<figure><div class="label">Request and response (real output of the running service)</div><pre><code>POST /v1/triage-requests
+X-API-Key: demo-key-clinic-1
+Content-Type: application/json
+
+{ &quot;patient_ref&quot;: &quot;PT-000123&quot;, &quot;message&quot;: &quot;Severe chest pain and shortness of breath since morning&quot;, &quot;language&quot;: &quot;en&quot; }
+
+HTTP/1.1 201 Created
+Location: /v1/triage-requests/tr_7b2897c75f9e
+X-RateLimit-Limit: 5
+X-RateLimit-Remaining: 4
+Cache-Control: no-store
+
+{ &quot;id&quot;: &quot;tr_7b2897c75f9e&quot;, &quot;urgency&quot;: &quot;high&quot;, &quot;suggested_department&quot;: &quot;Cardiology&quot;, &quot;confidence&quot;: 0.95,
+  &quot;needs_human_review&quot;: true, &quot;model_version&quot;: &quot;triage-rules-1.0&quot;,
+  &quot;disclaimer&quot;: &quot;Decision support only. Not a diagnosis. In an emergency call the ambulance service.&quot; }</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Status</th><th>When it is returned (verified by test)</th></tr></thead><tbody>
+<tr><td>200 / 201</td><td>Successful read / successful creation</td></tr>
+<tr><td>400 Bad Request</td><td>Body is not valid JSON</td></tr>
+<tr><td>401 Unauthorized</td><td>No or invalid API key / token, forged or expired token</td></tr>
+<tr><td>403 Forbidden</td><td>Authenticated but the token lacks the scope (<code>triage:write</code> or <code>triage:read</code>)</td></tr>
+<tr><td>404 Not Found</td><td>Unknown URI or request id (or one that belongs to another client)</td></tr>
+<tr><td>405 Method Not Allowed</td><td>Wrong method; <code>Allow</code> header lists the right one</td></tr>
+<tr><td>413 / 415</td><td>Body larger than 8 KB / Content-Type is not <code>application/json</code></td></tr>
+<tr><td>422 Unprocessable Entity</td><td>JSON is valid but fails validation (short message, bad <code>patient_ref</code>); details listed per field</td></tr>
+<tr><td>429 Too Many Requests</td><td>Rate limit exceeded; <code>Retry-After</code> header tells when to retry</td></tr>
+<tr><td>500 / 503</td><td>Internal error (no stack trace is shown) / dependency unavailable</td></tr>
+</tbody></table></div>
+<figure><div class="label">rest_api.php (request pipeline: route -&gt; authenticate -&gt; authorise -&gt; rate limit -&gt; validate -&gt; classify)</div><pre><code>$method = $_SERVER[&#x27;REQUEST_METHOD&#x27;];
+$path   = rtrim(parse_url($_SERVER[&#x27;REQUEST_URI&#x27;], PHP_URL_PATH) ?? &#x27;/&#x27;, &#x27;/&#x27;);
+
+if ($path === &#x27;/v1/health&#x27;) { respond(200, [&#x27;status&#x27; =&gt; &#x27;ok&#x27;, &#x27;version&#x27; =&gt; &#x27;v1&#x27;]); }
+
+$isCreate = $path === &#x27;/v1/triage-requests&#x27;;
+$isRead   = preg_match(&#x27;#^/v1/triage-requests/(tr_[a-f0-9]{12})$#&#x27;, $path, $m) === 1;
+if (!$isCreate &amp;&amp; !$isRead) { fail(404, &#x27;not_found&#x27;, &#x27;Unknown resource&#x27;); }
+if (($isCreate &amp;&amp; $method !== &#x27;POST&#x27;) || ($isRead &amp;&amp; $method !== &#x27;GET&#x27;)) {
+    fail(405, &#x27;method_not_allowed&#x27;, &#x27;Method not allowed&#x27;, [], [&#x27;Allow&#x27; =&gt; $isCreate ? &#x27;POST&#x27; : &#x27;GET&#x27;]);
+}
+
+// ---- authentication (who are you?) ----
+$auth = authenticate_rest($cfg);
+if (!$auth) { fail(401, &#x27;unauthorized&#x27;, &#x27;Valid API key or bearer token required&#x27;, [], [&#x27;WWW-Authenticate&#x27; =&gt; &#x27;Bearer&#x27;]); }
+
+// ---- authorisation (what may you do?) ----
+$need = $isCreate ? &#x27;triage:write&#x27; : &#x27;triage:read&#x27;;
+if (!in_array($need, $auth[&#x27;scopes&#x27;], true)) { fail(403, &#x27;forbidden&#x27;, &quot;Missing scope $need&quot;); }
+
+// ---- rate limiting ----
+$rl = rate_limit($auth[&#x27;client&#x27;], $cfg[&#x27;rate_limit&#x27;][&#x27;capacity&#x27;], $cfg[&#x27;rate_limit&#x27;][&#x27;refill_per_sec&#x27;]);
+$rlHeaders = [&#x27;X-RateLimit-Limit&#x27; =&gt; (string)$cfg[&#x27;rate_limit&#x27;][&#x27;capacity&#x27;], &#x27;X-RateLimit-Remaining&#x27; =&gt; (string)$rl[&#x27;remaining&#x27;]];
+if (!$rl[&#x27;allowed&#x27;]) { fail(429, &#x27;rate_limited&#x27;, &#x27;Too many requests&#x27;, [], $rlHeaders + [&#x27;Retry-After&#x27; =&gt; (string)$rl[&#x27;retry_after&#x27;]]); }
+
+$pdo = triage_pdo($cfg);
+
+if ($isRead) {
+    $st = $pdo-&gt;prepare(&#x27;SELECT * FROM triage_requests WHERE id = :id AND client = :c&#x27;);   // a client sees only its own rows
+    $st-&gt;execute([&#x27;:id&#x27; =&gt; $m[1], &#x27;:c&#x27; =&gt; $auth[&#x27;client&#x27;]]);
+    $row = $st-&gt;fetch();
+    if (!$row) { fail(404, &#x27;not_found&#x27;, &#x27;Triage request not found&#x27;, [], $rlHeaders); }
+    respond(200, [&#x27;id&#x27; =&gt; $row[&#x27;id&#x27;], &#x27;urgency&#x27; =&gt; $row[&#x27;urgency&#x27;], &#x27;suggested_department&#x27; =&gt; $row[&#x27;department&#x27;],
+                  &#x27;confidence&#x27; =&gt; (float)$row[&#x27;confidence&#x27;], &#x27;needs_human_review&#x27; =&gt; (bool)$row[&#x27;needs_review&#x27;],
+                  &#x27;model_version&#x27; =&gt; $row[&#x27;model_version&#x27;], &#x27;created_at&#x27; =&gt; $row[&#x27;created_at&#x27;]], $rlHeaders);
+}
+
+// ---- POST /v1/triage-requests ----
+if (stripos($_SERVER[&#x27;CONTENT_TYPE&#x27;] ?? &#x27;&#x27;, &#x27;application/json&#x27;) !== 0) {
+    fail(415, &#x27;unsupported_media_type&#x27;, &#x27;Content-Type must be application/json&#x27;, [], $rlHeaders);
+}
+$raw = file_get_contents(&#x27;php://input&#x27;, false, null, 0, 8193);
+if (strlen($raw) &gt; 8192) { fail(413, &#x27;payload_too_large&#x27;, &#x27;Body limited to 8 KB&#x27;, [], $rlHeaders); }
+try { $input = json_decode($raw, true, 8, JSON_THROW_ON_ERROR); }
+catch (JsonException) { fail(400, &#x27;invalid_json&#x27;, &#x27;Body is not valid JSON&#x27;, [], $rlHeaders); }
+
+[$errors, $clean] = validate_triage_input($input);
+if ($errors) { fail(422, &#x27;validation_failed&#x27;, &#x27;Input validation failed&#x27;, $errors, $rlHeaders); }
+
+$r = run_triage($pdo, $cfg, $clean, $auth[&#x27;client&#x27;]);
+respond(201, [&#x27;id&#x27; =&gt; $r[&#x27;id&#x27;], &#x27;urgency&#x27; =&gt; $r[&#x27;urgency&#x27;], &#x27;suggested_department&#x27; =&gt; $r[&#x27;department&#x27;],
+              &#x27;confidence&#x27; =&gt; $r[&#x27;confidence&#x27;], &#x27;needs_human_review&#x27; =&gt; $r[&#x27;needs_human_review&#x27;],
+              &#x27;model_version&#x27; =&gt; $r[&#x27;model_version&#x27;], &#x27;disclaimer&#x27; =&gt; $r[&#x27;disclaimer&#x27;]],
+        $rlHeaders + [&#x27;Location&#x27; =&gt; &#x27;/v1/triage-requests/&#x27; . $r[&#x27;id&#x27;]]);</code></pre></figure>
+<h2>C. SOAP design</h2>
+<p>A SOAP message is an XML <strong>Envelope</strong> that contains an optional <strong>Header</strong> (metadata such as security tokens) and a mandatory <strong>Body</strong> (the operation and its data). Errors are returned as a <strong>Fault</strong> element (<code>faultcode</code>, <code>faultstring</code>, optional <code>detail</code>). The contract is the WSDL (<code>triage.wsdl</code>, document/literal): operation <code>classifyUrgency</code> with an input message, an output message and a fault.</p>
+<figure><div class="label">SOAP request, response and fault (captured from the running service)</div><pre><code>&lt;SOAP-ENV:Envelope xmlns:SOAP-ENV=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot; xmlns:ns1=&quot;urn:hospital:triage&quot;&gt;
+  &lt;SOAP-ENV:Header&gt;
+    &lt;wsse:Security xmlns:wsse=&quot;...oasis-200401-wss-wssecurity-secext-1.0.xsd&quot; xmlns:wsu=&quot;...wssecurity-utility-1.0.xsd&quot;&gt;
+      &lt;wsse:UsernameToken&gt;
+        &lt;wsse:Username&gt;billing-system&lt;/wsse:Username&gt;
+        &lt;wsse:Password Type=&quot;PasswordDigest&quot;&gt;UQD5pqtnr9/bnBnVRX2J6BCZato=&lt;/wsse:Password&gt;
+        &lt;wsse:Nonce&gt;HIjPDbBHp5zULPzy4vI8vg==&lt;/wsse:Nonce&gt;&lt;wsu:Created&gt;2026-11-22T18:29:51Z&lt;/wsu:Created&gt;
+      &lt;/wsse:UsernameToken&gt;
+    &lt;/wsse:Security&gt;
+  &lt;/SOAP-ENV:Header&gt;
+  &lt;SOAP-ENV:Body&gt;
+    &lt;ns1:classifyUrgency&gt;&lt;ns1:patientRef&gt;PT-000200&lt;/ns1:patientRef&gt;
+      &lt;ns1:message&gt;Severe chest pain since morning&lt;/ns1:message&gt;&lt;ns1:language&gt;en&lt;/ns1:language&gt;&lt;/ns1:classifyUrgency&gt;
+  &lt;/SOAP-ENV:Body&gt;
+&lt;/SOAP-ENV:Envelope&gt;
+
+--- response body ---
+&lt;ns1:classifyUrgencyResponse&gt;&lt;ns1:requestId&gt;tr_1710a53f0423&lt;/ns1:requestId&gt;&lt;ns1:urgency&gt;high&lt;/ns1:urgency&gt;
+  &lt;ns1:department&gt;Cardiology&lt;/ns1:department&gt;&lt;ns1:confidence&gt;0.85&lt;/ns1:confidence&gt;
+  &lt;ns1:needsHumanReview&gt;true&lt;/ns1:needsHumanReview&gt;&lt;ns1:modelVersion&gt;triage-rules-1.0&lt;/ns1:modelVersion&gt;&lt;/ns1:classifyUrgencyResponse&gt;
+
+--- fault (wrong password) ---
+&lt;SOAP-ENV:Fault&gt;&lt;faultcode&gt;wsse:FailedAuthentication&lt;/faultcode&gt;&lt;faultstring&gt;Invalid credentials&lt;/faultstring&gt;&lt;/SOAP-ENV:Fault&gt;</code></pre></figure>
+<figure><div class="label">triage.wsdl (messages, portType and binding; the types section holds the XML Schema)</div><pre><code>  &lt;message name=&quot;classifyUrgencyRequest&quot;&gt;&lt;part name=&quot;parameters&quot; element=&quot;tns:classifyUrgency&quot;/&gt;&lt;/message&gt;
+  &lt;message name=&quot;classifyUrgencyResponse&quot;&gt;&lt;part name=&quot;parameters&quot; element=&quot;tns:classifyUrgencyResponse&quot;/&gt;&lt;/message&gt;
+  &lt;message name=&quot;TriageFaultMessage&quot;&gt;&lt;part name=&quot;fault&quot; element=&quot;tns:TriageFault&quot;/&gt;&lt;/message&gt;
+
+  &lt;portType name=&quot;TriagePortType&quot;&gt;
+    &lt;operation name=&quot;classifyUrgency&quot;&gt;
+      &lt;input  message=&quot;tns:classifyUrgencyRequest&quot;/&gt;
+      &lt;output message=&quot;tns:classifyUrgencyResponse&quot;/&gt;
+      &lt;fault  name=&quot;TriageFault&quot; message=&quot;tns:TriageFaultMessage&quot;/&gt;
+    &lt;/operation&gt;
+  &lt;/portType&gt;
+
+  &lt;binding name=&quot;TriageBinding&quot; type=&quot;tns:TriagePortType&quot;&gt;
+    &lt;soap:binding style=&quot;document&quot; transport=&quot;http://schemas.xmlsoap.org/soap/http&quot;/&gt;
+    &lt;operation name=&quot;classifyUrgency&quot;&gt;
+      &lt;soap:operation soapAction=&quot;urn:hospital:triage#classifyUrgency&quot;/&gt;
+      &lt;input&gt;&lt;soap:body use=&quot;literal&quot;/&gt;&lt;/input&gt;
+      &lt;output&gt;&lt;soap:body use=&quot;literal&quot;/&gt;&lt;/output&gt;
+      &lt;fault name=&quot;TriageFault&quot;&gt;&lt;soap:fault name=&quot;TriageFault&quot; use=&quot;literal&quot;/&gt;&lt;/fault&gt;
+    &lt;/operation&gt;
+  &lt;/binding&gt;</code></pre></figure>
+<h2>D. Authentication and authorisation</h2>
+<div class="tw"><table><thead><tr><th>Mechanism</th><th>How it works</th><th>Used for</th><th>Strengths / limits</th></tr></thead><tbody>
+<tr><td>API key</td><td>Secret string sent in <code>X-API-Key</code>; the server stores only its SHA-256 hash and compares in constant time</td><td>Partner clinic back-end servers</td><td>Simple. Identifies an application, not a person; must be rotated; never put in a mobile app</td></tr>
+<tr><td>OAuth 2.0 bearer token</td><td>An authorisation server issues a short-lived signed token (JWT) with <code>sub</code>, <code>iss</code>, <code>exp</code> and <code>scope</code>; the API checks signature, issuer, expiry and scope</td><td>Mobile app and web portal (user or client-credentials flow)</td><td>Short life, scopes give least privilege, revocable, no password reaches the API</td></tr>
+<tr><td>WS-Security UsernameToken (digest)</td><td>Header carries username, nonce, timestamp and <code>Base64(SHA1(nonce + created + password))</code>; server recomputes, checks age (5 min) and rejects reused nonces</td><td>SOAP partner systems</td><td>Standard for SOAP; password never sent; replay-protected. Message signing/encryption (XML-DSig, XML-Enc) or mutual TLS can be added for stronger protection</td></tr>
+</tbody></table></div>
+<p><strong>Authorisation</strong> answers &quot;what may this caller do?&quot;. Tokens carry scopes (<code>triage:write</code> to create, <code>triage:read</code> to read) and the code returns 403 when a scope is missing. Data access is also restricted by owner: a client can read only the requests it created. Transport is always TLS (HTTPS).</p>
+<figure><div class="label">auth.php (token verification: algorithm check, constant-time signature compare, issuer, expiry)</div><pre><code>/** @return array|null claims if the token is valid */
+function jwt_verify(string $token, string $secret, string $issuer): ?array
+{
+    $parts = explode(&#x27;.&#x27;, $token);
+    if (count($parts) !== 3) { return null; }
+    [$h, $p, $sig] = $parts;
+    $header = json_decode(b64url_decode($h), true);
+    if (($header[&#x27;alg&#x27;] ?? &#x27;&#x27;) !== &#x27;HS256&#x27;) { return null; }             // refuse alg=none and algorithm swapping
+    $expected = b64url_encode(hash_hmac(&#x27;sha256&#x27;, &quot;$h.$p&quot;, $secret, true));
+    if (!hash_equals($expected, $sig)) { return null; }                  // constant-time compare
+    $c = json_decode(b64url_decode($p), true);
+    if (!is_array($c) || ($c[&#x27;iss&#x27;] ?? &#x27;&#x27;) !== $issuer || ($c[&#x27;exp&#x27;] ?? 0) &lt; time()) { return null; }
+    return $c;
+}</code></pre></figure>
+<figure><div class="label">soap_server.php (WS-Security digest, time window and nonce replay check)</div><pre><code>/** Verify the WS-Security UsernameToken (PasswordDigest = Base64(SHA1(nonce + created + password))). */
+function verify_wsse(string $rawXml, array $users): string
+{
+    $dom = new DOMDocument();
+    if (!@$dom-&gt;loadXML($rawXml, LIBXML_NONET)) { throw new SoapFault(&#x27;Client&#x27;, &#x27;Malformed XML&#x27;); }
+    $xp = new DOMXPath($dom);
+    $xp-&gt;registerNamespace(&#x27;wsse&#x27;, WSSE);
+    $xp-&gt;registerNamespace(&#x27;wsu&#x27;, WSU);
+    $tok = $xp-&gt;query(&#x27;//wsse:Security/wsse:UsernameToken&#x27;)-&gt;item(0);
+    if (!$tok) { throw new SoapFault(&#x27;wsse:SecurityTokenUnavailable&#x27;, &#x27;WS-Security header missing&#x27;); }
+
+    $user    = $xp-&gt;evaluate(&#x27;string(wsse:Username)&#x27;, $tok);
+    $digest  = $xp-&gt;evaluate(&#x27;string(wsse:Password)&#x27;, $tok);
+    $nonceB  = $xp-&gt;evaluate(&#x27;string(wsse:Nonce)&#x27;, $tok);
+    $created = $xp-&gt;evaluate(&#x27;string(wsu:Created)&#x27;, $tok);
+
+    $age = abs(time() - (int)strtotime($created));
+    if ($created === &#x27;&#x27; || $age &gt; 300) { throw new SoapFault(&#x27;wsse:FailedAuthentication&#x27;, &#x27;Token expired or timestamp invalid&#x27;); }
+    $password = $users[$user] ?? null;
+    $expected = $password === null ? &#x27;&#x27; : base64_encode(sha1(base64_decode($nonceB) . $created . $password, true));
+    if ($password === null || !hash_equals($expected, $digest)) {
+        throw new SoapFault(&#x27;wsse:FailedAuthentication&#x27;, &#x27;Invalid credentials&#x27;);
+    }
+    // replay protection: a nonce may be used only once inside the validity window
+    $f = sys_get_temp_dir() . &#x27;/triage_nonces.json&#x27;;
+    $seen = is_file($f) ? (json_decode((string)file_get_contents($f), true) ?: []) : [];
+    $seen = array_filter($seen, static fn($t) =&gt; $t &gt; time() - 300);
+    if (isset($seen[$nonceB])) { throw new SoapFault(&#x27;wsse:FailedAuthentication&#x27;, &#x27;Replay detected&#x27;); }
+    $seen[$nonceB] = time();
+    file_put_contents($f, json_encode($seen), LOCK_EX);
+    return $user;
+}</code></pre></figure>
+<h2>E. REST compared with SOAP for this case</h2>
+<div class="tw"><table><thead><tr><th>Criterion</th><th>REST (JSON over HTTP)</th><th>SOAP (XML with WSDL)</th></tr></thead><tbody>
+<tr><td>Format and size</td><td>Compact JSON; light for mobile networks</td><td>Verbose XML envelope; larger and slower to parse</td></tr>
+<tr><td>Contract</td><td>OpenAPI description (optional, by convention)</td><td>WSDL + XSD is mandatory and strict; stubs are generated automatically</td></tr>
+<tr><td>Security</td><td>TLS + OAuth 2.0 / API keys</td><td>TLS + WS-Security (signing, encryption, tokens) built into the standard</td></tr>
+<tr><td>Standard error handling</td><td>HTTP status codes and JSON error body</td><td>Standard <code>Fault</code> element</td></tr>
+<tr><td>Caching and tooling</td><td>Uses HTTP caching and simple tools (curl, browsers)</td><td>Requires SOAP-aware tools; POST only, so not cacheable</td></tr>
+<tr><td>Fit with legacy billing and appointment systems</td><td>Poor: many older enterprise systems cannot call JSON APIs</td><td>Good: these systems already consume WSDL contracts</td></tr>
+<tr><td>Fit with the mobile app</td><td>Excellent</td><td>Poor (heavy libraries, battery and data cost)</td></tr>
+</tbody></table></div>
+<p><strong>Conclusion.</strong> Use REST as the primary interface for the mobile app and offer SOAP as an adapter for partner clinics. Because both call the same <code>run_triage()</code> core, the answers, the safety rules and the audit trail are identical.</p>
+<h2>F. Issues and the measures taken</h2>
+<div class="tw"><table><thead><tr><th>Issue</th><th>Risk</th><th>Measures</th></tr></thead><tbody>
+<tr><td>Latency</td><td>A slow model delays triage; patients may wait or abandon the service</td><td>Latency budget (for example 2 s for the model call, enforced with <code>CURLOPT_TIMEOUT_MS</code>); model server close to the API; keep models small or quantised; asynchronous processing for heavy models; connection reuse; monitor p95. <strong>If the model times out the service fails safe</strong>: it returns &quot;medium&quot; with human review, never a silent &quot;low&quot;</td></tr>
+<tr><td>Rate limiting</td><td>Abuse, scraping, accidental loops and denial of service</td><td>Token bucket per client (5 burst, 1 per second in the demo) returning 429 with <code>Retry-After</code> and <code>X-RateLimit-*</code> headers; request-size limit of 8 KB; limits also at the gateway/WAF; larger quotas for trusted partners</td></tr>
+<tr><td>Input validation</td><td>Injection, huge or malformed input, unexpected types</td><td>Server-side checks: message 5–1000 characters with control characters removed, <code>patient_ref</code> must match <code>[A-Za-z0-9_-]{6,40}</code>, language from a whitelist, JSON depth limit, Content-Type check; prepared SQL statements; XML: DTDs not accepted</td></tr>
+<tr><td>Privacy of patient data</td><td>Symptoms are sensitive health data</td><td>TLS everywhere; <strong>pseudonymous `patient_ref` only</strong> (no name, phone or address accepted); the message text is <strong>not stored</strong>; <code>Cache-Control: no-store</code>; no personal data in URLs or logs; access limited by scope and by owner; encryption at rest; retention rules; consent notice and compliance with data-protection law (for example India&#x27;s DPDP Act 2023, and GDPR/HIPAA where they apply)</td></tr>
+<tr><td>Model errors and bias</td><td>A missed emergency (false negative), different accuracy for some languages, ages, genders or dialects, over-reliance on the output</td><td>Tune for high sensitivity on &quot;high&quot; urgency; confidence below 0.60 is escalated one level; every &quot;high&quot; result needs human review; clear disclaimer; test accuracy per subgroup before release; log model version with each result; monitor drift and compare outcomes; clinical governance review; allow staff to override and feed corrections back to retraining</td></tr>
+<tr><td>API versioning</td><td>Changes break existing clients, especially fixed legacy systems</td><td>Version in the URI (<code>/v1</code>); only add optional fields within a version; announce deprecations with a <code>Sunset</code> header; run <code>/v1</code> and <code>/v2</code> side by side; SOAP uses a versioned namespace and keeps old WSDLs; <code>model_version</code> is returned so results are traceable</td></tr>
+</tbody></table></div>
+<h2>G. Test results</h2>
+<figure><div class="label">Results from running the code on PHP 8.3 (REST and SOAP services)</div><pre><code>health: 200 | no auth: 401 | create: 201 + Location | invalid input: 422 | bad JSON: 400 | wrong Content-Type: 415 | POST on GET resource: 405
+rate limit: 200 200 429 429 429 429 429 429  (burst of 8 calls)
+JWT with triage:write -&gt; POST 201, GET 403 (missing triage:read) | forged signature 401 | expired token 401
+SOAP: valid call returns result | wrong password -&gt; Fault wsse:FailedAuthentication | message &quot;hi&quot; -&gt; Fault Client: Validation failed</code></pre></figure>
+<p><strong>Verdict.</strong> The design is justified: the model sits safely behind one controlled service, each client type gets an interface it can actually use, and the main risks (latency, abuse, invalid input, privacy, wrong predictions and breaking changes) each have a concrete control. The remaining risk is clinical: the service must remain decision support with human review for urgent cases, and the model needs continuous monitoring after release.</p>
+
+<nav><span></span><a href="a5_q2_wsdl_testing.html">Question 2 &rarr;</a></nav>
+</main></body></html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA4307 Assignment 5 - Q3: Database-driven library SOAP service</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#555;--acc:#1f4e79;--line:#c9ced6;--head:#e3ebf6;--codebg:#f3f4f6;--qbg:#f7f9fc}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#e6e8eb;--mut:#a3aab5;--acc:#8fb8e8;--line:#3a414c;--head:#23303f;--codebg:#1e2229;--qbg:#1b2028}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,'Times New Roman',serif}
+main{max-width:980px;margin:0 auto;padding:24px 18px 60px}
+.top{color:var(--mut);font:14px/1.4 Arial,sans-serif;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.q{background:var(--qbg);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:14px 0 26px}
+.q .meta{font:13px Arial,sans-serif;color:var(--mut);margin-top:8px}
+h1{font:700 1.5rem Arial,sans-serif;color:var(--acc);border-bottom:3px solid var(--acc);padding-bottom:6px;margin:26px 0 10px}
+h2{font:700 1.15rem Arial,sans-serif;color:var(--acc);border-bottom:1px solid var(--line);padding-bottom:3px;margin:30px 0 10px}
+p{margin:.6em 0;text-align:justify}
+code{font:.88em Consolas,'Courier New',monospace;background:var(--codebg);padding:1px 4px;border-radius:3px}
+figure{margin:12px 0}.label{font:italic 700 13px Arial,sans-serif;color:var(--acc);margin-bottom:3px}
+pre{margin:0;background:var(--codebg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto}
+pre code{background:none;padding:0;font-size:12.5px;line-height:1.45;white-space:pre}
+.tw{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font:14px/1.45 Arial,sans-serif}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--head)}
+ul,ol{padding-left:1.4em}li{margin:.3em 0}
+nav{margin-top:40px;font:14px Arial,sans-serif;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+a{color:var(--acc)}
+@media print{pre code{font-size:10px}body{font-size:12pt}}
+</style></head>
+<body><main>
+<div class="top"><span>Saveetha Institute of Medical and Technical Sciences &middot; Nov 2026</span><span>CSA4307 &middot; Internet Programming &middot; Assignment 5</span></div>
+<div class="q"><strong>Question 3.</strong> A college library keeps its book records in a relational database and wants to offer them to other applications as a database-driven SOAP web service. Develop the solution by explaining how the service is created (for example, JAX-WS in Java or SoapServer in PHP) with operations such as searchBook, getBookDetails and issueBook; how the operations access the database using JDBC or PDO with prepared statements and transactions; how SOAP faults report errors; and how the WSDL is published. Then explain how a client application consumes the service, by generating client stubs from the WSDL or using SoapClient, building the request, calling the operation and processing the response. Evaluate how the design handles SQL injection, concurrent issue requests, authentication and error handling, and discuss when a REST service would be preferred to SOAP.<div class="meta">Marks (10) &nbsp; (CO5) &nbsp; (BL5)</div></div>
+<h1>ANSWER 3 – Database-driven SOAP web service for the college library</h1>
+<p><strong>Idea.</strong> The library keeps its book records in a relational database. A SOAP service publishes three operations so that other applications can use the records without direct database access: <strong>searchBook</strong>, <strong>getBookDetails</strong> and <strong>issueBook</strong>. The database stays private behind the service; clients see only the WSDL contract.</p>
+<figure><div class="label">Architecture</div><pre><code>Client application --SOAP over HTTPS--&gt; SoapServer (PHP) / JAX-WS endpoint (Java)
+        ^                                         |
+        |  WSDL at ?wsdl (the contract)           |  PDO / JDBC prepared statements, transactions
+        +-----------------------------------------+--&gt; Database: books, members, loans</code></pre></figure>
+<div class="tw"><table><thead><tr><th>Operation</th><th>Input</th><th>Output</th><th>Access</th></tr></thead><tbody>
+<tr><td><code>searchBook</code></td><td>keyword (2–60 characters)</td><td>list of books: id, title, author, ISBN, available</td><td>Public and desk keys (read)</td></tr>
+<tr><td><code>getBookDetails</code></td><td>bookId</td><td>title, author, ISBN, total and available copies</td><td>Public and desk keys (read)</td></tr>
+<tr><td><code>issueBook</code></td><td>bookId, memberId</td><td>loanId and due date (14 days)</td><td>Desk key only (write)</td></tr>
+</tbody></table></div>
+<h2>A. How the service is created and the WSDL published</h2>
+<p><strong>PHP:</strong> <code>SoapServer</code> is created from the WSDL and an object whose public methods implement the operations (<code>setObject</code>). <code>handle()</code> reads the SOAP request, calls the matching method and writes the response; a thrown <code>SoapFault</code> becomes a Fault message. The WSDL is published by serving the file when the URL ends with <code>?wsdl</code>, so clients can fetch the contract from the endpoint. <strong>Java (JAX-WS):</strong> annotate a class with <code>@WebService</code>, and <code>Endpoint.publish()</code> starts the endpoint and publishes the WSDL automatically at <code>?wsdl</code>.</p>
+<figure><div class="label">server.php (WSDL publication, authentication, SoapServer)</div><pre><code>/** Run: php -S 127.0.0.1:8084 server.php     WSDL: http://127.0.0.1:8084/server.php?wsdl */
+require __DIR__ . &#x27;/db.php&#x27;;
+require __DIR__ . &#x27;/LibraryService.php&#x27;;
+
+if (($_SERVER[&#x27;REQUEST_METHOD&#x27;] ?? &#x27;&#x27;) === &#x27;GET&#x27;) {
+    if (isset($_GET[&#x27;wsdl&#x27;])) { header(&#x27;Content-Type: text/xml; charset=UTF-8&#x27;); readfile(__DIR__ . &#x27;/library.wsdl&#x27;); exit; }
+    http_response_code(405); exit;
+}
+
+// ---- authentication: API key -&gt; role (store only hashes in production) ----
+$roles = [hash(&#x27;sha256&#x27;, &#x27;public-key-123&#x27;) =&gt; &#x27;public&#x27;, hash(&#x27;sha256&#x27;, &#x27;desk-key-456&#x27;) =&gt; &#x27;desk&#x27;];
+$role  = $roles[hash(&#x27;sha256&#x27;, $_SERVER[&#x27;HTTP_X_API_KEY&#x27;] ?? &#x27;&#x27;)] ?? null;
+if ($role === null) {
+    http_response_code(401);
+    header(&#x27;Content-Type: text/xml; charset=UTF-8&#x27;);
+    echo &#x27;&lt;?xml version=&quot;1.0&quot;?&gt;&lt;SOAP-ENV:Envelope xmlns:SOAP-ENV=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;&lt;SOAP-ENV:Body&gt;&#x27;
+       . &#x27;&lt;SOAP-ENV:Fault&gt;&lt;faultcode&gt;SOAP-ENV:Client&lt;/faultcode&gt;&lt;faultstring&gt;ERR_UNAUTHORIZED: valid X-Api-Key required&lt;/faultstring&gt;&#x27;
+       . &#x27;&lt;/SOAP-ENV:Fault&gt;&lt;/SOAP-ENV:Body&gt;&lt;/SOAP-ENV:Envelope&gt;&#x27;;
+    exit;
+}
+$raw = file_get_contents(&#x27;php://input&#x27;, false, null, 0, 16385);
+if (strlen($raw) &gt; 16384 || stripos($raw, &#x27;&lt;!DOCTYPE&#x27;) !== false) {          // size limit, no DTD / XXE
+    http_response_code(400); exit;
+}
+
+$pdo = library_pdo();
+if ($pdo-&gt;getAttribute(PDO::ATTR_DRIVER_NAME) === &#x27;sqlite&#x27;) { seed_demo($pdo); }   // demo only
+
+$server = new SoapServer(__DIR__ . &#x27;/library.wsdl&#x27;, [&#x27;cache_wsdl&#x27; =&gt; WSDL_CACHE_NONE]);
+$server-&gt;setObject(new LibraryService($pdo, $role));
+$server-&gt;handle($raw);</code></pre></figure>
+<figure><div class="label">JAX-WS version</div><pre><code>// JAX-WS (Java) equivalent - shown for comparison, not executed in this submission
+@WebService(serviceName = &quot;LibraryService&quot;)
+public class LibraryService {
+    @WebMethod public List&lt;BookSummary&gt; searchBook(@WebParam(name = &quot;keyword&quot;) String keyword) { /* JDBC query */ }
+    @WebMethod public BookDetails getBookDetails(@WebParam(name = &quot;bookId&quot;) int bookId) { /* JDBC query */ }
+    @WebMethod public IssueResult issueBook(@WebParam(name = &quot;bookId&quot;) int bookId, @WebParam(name = &quot;memberId&quot;) int memberId) throws LibraryFault { /* transaction */ }
+    public static void main(String[] a) { Endpoint.publish(&quot;http://localhost:8084/library&quot;, new LibraryService()); }  // WSDL at /library?wsdl
+}</code></pre></figure>
+<h2>B. Database access with prepared statements and transactions</h2>
+<p>Every query uses a <strong>prepared statement</strong> (PDO in PHP, <code>PreparedStatement</code> in JDBC): the SQL text is fixed and the values are bound as parameters, so user input can never change the structure of the query. <code>issueBook</code> changes three things (member check, stock, loan record) and must succeed or fail as a whole, so it runs in one <strong>transaction</strong>: <code>BEGIN</code> ... <code>COMMIT</code>, with <code>ROLLBACK</code> on any error. The stock is reduced with a single conditional statement, <code>UPDATE books SET available_copies = available_copies - 1 WHERE id = :b AND available_copies &gt; 0</code>, and the service checks that exactly one row was changed. The database applies this check and change atomically, so two requests can never take the last copy. In MySQL (InnoDB) the member row is also locked with <code>SELECT ... FOR UPDATE</code> so that two requests for the same member are processed one after the other and the three-book limit cannot be bypassed; SQLite (used for the offline demo) takes the write lock with <code>BEGIN IMMEDIATE</code>.</p>
+<figure><div class="label">db.php (connection with exceptions, real prepared statements)</div><pre><code>function library_pdo(): PDO
+{
+    $dsn  = getenv(&#x27;LIB_DSN&#x27;) ?: &#x27;sqlite:&#x27; . (getenv(&#x27;LIB_SQLITE&#x27;) ?: sys_get_temp_dir() . &#x27;/library_demo.sqlite&#x27;);
+    $pdo  = new PDO($dsn, getenv(&#x27;LIB_USER&#x27;) ?: null, getenv(&#x27;LIB_PASS&#x27;) ?: null, [
+        PDO::ATTR_ERRMODE            =&gt; PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE =&gt; PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   =&gt; false,
+    ]);
+    if ($pdo-&gt;getAttribute(PDO::ATTR_DRIVER_NAME) === &#x27;sqlite&#x27;) {
+        $pdo-&gt;exec(&#x27;PRAGMA busy_timeout = 5000&#x27;);            // wait for the write lock instead of failing at once
+        $pdo-&gt;exec(&#x27;PRAGMA foreign_keys = ON&#x27;);
+    }
+    return $pdo;
+}</code></pre></figure>
+<figure><div class="label">LibraryService.php: permissions and searchBook</div><pre><code>/** The business operations published through SOAP. */
+final class LibraryService
+{
+    private const MAX_OPEN_LOANS = 3;
+    private const LOAN_DAYS = 14;
+
+    public function __construct(private PDO $pdo, private string $role) {}
+
+    private function fault(string $code, string $msg): never { throw new SoapFault(&#x27;Client&#x27;, &quot;$code: $msg&quot;); }
+    private function need(string $permission): void
+    {
+        $allowed = [&#x27;public&#x27; =&gt; [&#x27;read&#x27;], &#x27;desk&#x27; =&gt; [&#x27;read&#x27;, &#x27;issue&#x27;]][$this-&gt;role] ?? [];
+        if (!in_array($permission, $allowed, true)) { $this-&gt;fault(&#x27;ERR_FORBIDDEN&#x27;, &#x27;This API key may not perform this operation&#x27;); }
+    }
+
+    /** searchBook(keyword) */
+    public function searchBook(object $p): array
+    {
+        $this-&gt;need(&#x27;read&#x27;);
+        $kw = trim((string)($p-&gt;keyword ?? &#x27;&#x27;));
+        if (mb_strlen($kw) &lt; 2 || mb_strlen($kw) &gt; 60) { $this-&gt;fault(&#x27;ERR_INVALID_KEYWORD&#x27;, &#x27;keyword must be 2 to 60 characters&#x27;); }
+        $like = &#x27;%&#x27; . addcslashes($kw, &#x27;%_\\&#x27;) . &#x27;%&#x27;;             // user-typed % and _ are matched literally
+        $st = $this-&gt;pdo-&gt;prepare(&quot;SELECT id, title, author, isbn, available_copies FROM books
+                                   WHERE title LIKE :k ESCAPE &#x27;\\&#x27; OR author LIKE :k ESCAPE &#x27;\\&#x27;
+                                   ORDER BY title LIMIT 25&quot;);
+        $st-&gt;execute([&#x27;:k&#x27; =&gt; $like]);
+        return [&#x27;book&#x27; =&gt; array_map(static fn($r) =&gt; [
+            &#x27;id&#x27; =&gt; (int)$r[&#x27;id&#x27;], &#x27;title&#x27; =&gt; $r[&#x27;title&#x27;], &#x27;author&#x27; =&gt; $r[&#x27;author&#x27;],
+            &#x27;isbn&#x27; =&gt; $r[&#x27;isbn&#x27;], &#x27;available&#x27; =&gt; (int)$r[&#x27;available_copies&#x27;] &gt; 0], $st-&gt;fetchAll())];
+    }</code></pre></figure>
+<figure><div class="label">LibraryService.php: issueBook (transaction)</div><pre><code>    /** issueBook(bookId, memberId): one atomic transaction */
+    public function issueBook(object $p): array
+    {
+        $this-&gt;need(&#x27;issue&#x27;);
+        $bookId   = filter_var($p-&gt;bookId ?? null,   FILTER_VALIDATE_INT, [&#x27;options&#x27; =&gt; [&#x27;min_range&#x27; =&gt; 1]]);
+        $memberId = filter_var($p-&gt;memberId ?? null, FILTER_VALIDATE_INT, [&#x27;options&#x27; =&gt; [&#x27;min_range&#x27; =&gt; 1]]);
+        if ($bookId === false || $memberId === false) { $this-&gt;fault(&#x27;ERR_INVALID_ID&#x27;, &#x27;bookId and memberId must be positive integers&#x27;); }
+
+        $sqlite = $this-&gt;pdo-&gt;getAttribute(PDO::ATTR_DRIVER_NAME) === &#x27;sqlite&#x27;;
+        $sqlite ? $this-&gt;pdo-&gt;exec(&#x27;BEGIN IMMEDIATE&#x27;) : $this-&gt;pdo-&gt;beginTransaction();   // IMMEDIATE = take the write lock now
+        try {
+            // 1. lock the member row so two requests for the same member are serialised (MySQL: FOR UPDATE)
+            $st = $this-&gt;pdo-&gt;prepare(&#x27;SELECT active FROM members WHERE id = :m&#x27; . ($sqlite ? &#x27;&#x27; : &#x27; FOR UPDATE&#x27;));
+            $st-&gt;execute([&#x27;:m&#x27; =&gt; $memberId]);
+            $m = $st-&gt;fetch();
+            if (!$m || !(int)$m[&#x27;active&#x27;]) { $this-&gt;fault(&#x27;ERR_MEMBER&#x27;, &#x27;Member not found or inactive&#x27;); }
+
+            // 2. business rules
+            $st = $this-&gt;pdo-&gt;prepare(&#x27;SELECT COUNT(*) FROM loans WHERE member_id = :m AND returned_at IS NULL&#x27;);
+            $st-&gt;execute([&#x27;:m&#x27; =&gt; $memberId]);
+            if ((int)$st-&gt;fetchColumn() &gt;= self::MAX_OPEN_LOANS) { $this-&gt;fault(&#x27;ERR_LIMIT&#x27;, &#x27;Member already has 3 books on loan&#x27;); }
+            $st = $this-&gt;pdo-&gt;prepare(&#x27;SELECT COUNT(*) FROM loans WHERE member_id = :m AND book_id = :b AND returned_at IS NULL&#x27;);
+            $st-&gt;execute([&#x27;:m&#x27; =&gt; $memberId, &#x27;:b&#x27; =&gt; $bookId]);
+            if ((int)$st-&gt;fetchColumn() &gt; 0) { $this-&gt;fault(&#x27;ERR_DUPLICATE&#x27;, &#x27;Member already has this book&#x27;); }
+
+            // 3. atomic stock decrement: the WHERE clause makes overselling impossible
+            $st = $this-&gt;pdo-&gt;prepare(&#x27;UPDATE books SET available_copies = available_copies - 1
+                                       WHERE id = :b AND available_copies &gt; 0&#x27;);
+            $st-&gt;execute([&#x27;:b&#x27; =&gt; $bookId]);
+            if ($st-&gt;rowCount() !== 1) {
+                $ex = $this-&gt;pdo-&gt;prepare(&#x27;SELECT 1 FROM books WHERE id = :b&#x27;);
+                $ex-&gt;execute([&#x27;:b&#x27; =&gt; $bookId]);
+                if ($ex-&gt;fetchColumn()) { $this-&gt;fault(&#x27;ERR_OUT_OF_STOCK&#x27;, &#x27;No copy of this book is available&#x27;); }
+                $this-&gt;fault(&#x27;ERR_NOT_FOUND&#x27;, &#x27;Book not found&#x27;);
+            }
+
+            // 4. record the loan
+            $due = (new DateTimeImmutable(&#x27;today&#x27;))-&gt;modify(&#x27;+&#x27; . self::LOAN_DAYS . &#x27; days&#x27;)-&gt;format(&#x27;Y-m-d&#x27;);
+            $this-&gt;pdo-&gt;prepare(&#x27;INSERT INTO loans (book_id, member_id, issued_at, due_date) VALUES (:b,:m,:t,:d)&#x27;)
+                      -&gt;execute([&#x27;:b&#x27; =&gt; $bookId, &#x27;:m&#x27; =&gt; $memberId, &#x27;:t&#x27; =&gt; gmdate(&#x27;Y-m-d H:i:s&#x27;), &#x27;:d&#x27; =&gt; $due]);
+            $loanId = (int)$this-&gt;pdo-&gt;lastInsertId();
+
+            $sqlite ? $this-&gt;pdo-&gt;exec(&#x27;COMMIT&#x27;) : $this-&gt;pdo-&gt;commit();
+            return [&#x27;loanId&#x27; =&gt; $loanId, &#x27;dueDate&#x27; =&gt; $due];
+        } catch (SoapFault $f) {
+            $this-&gt;rollback($sqlite);                                                    // business error: undo everything
+            throw $f;
+        } catch (Throwable $e) {
+            $this-&gt;rollback($sqlite);
+            error_log(&#x27;issueBook failed: &#x27; . $e-&gt;getMessage());                          // details only in the server log
+            throw new SoapFault(&#x27;Server&#x27;, &#x27;ERR_INTERNAL: the request could not be completed&#x27;);
+        }
+    }
+
+    private function rollback(bool $sqlite): void
+    {
+        try { $sqlite ? $this-&gt;pdo-&gt;exec(&#x27;ROLLBACK&#x27;) : $this-&gt;pdo-&gt;rollBack(); } catch (Throwable) { /* nothing to roll back */ }
+    }
+}</code></pre></figure>
+<h2>C. Reporting errors with SOAP faults</h2>
+<p>A <strong>SOAP Fault</strong> carries a <code>faultcode</code> (<code>Client</code> means the request was wrong, <code>Server</code> means the service failed), a human-readable <code>faultstring</code> and optional <code>detail</code>. The service uses <code>Client</code> faults with a stable error code at the start of the text, so a client program can decide what to do without parsing prose. Unexpected errors are logged on the server and the client only receives a generic <code>ERR_INTERNAL</code> fault, so table names or SQL never leak.</p>
+<div class="tw"><table><thead><tr><th>Fault text</th><th>Cause</th><th>Client action</th></tr></thead><tbody>
+<tr><td><code>ERR_UNAUTHORIZED</code> (HTTP 401)</td><td>Missing or wrong API key</td><td>Fix credentials</td></tr>
+<tr><td><code>ERR_FORBIDDEN</code></td><td>Read-only key tried <code>issueBook</code></td><td>Use a desk key</td></tr>
+<tr><td><code>ERR_INVALID_KEYWORD</code>, <code>ERR_INVALID_ID</code></td><td>Input fails validation</td><td>Correct the input</td></tr>
+<tr><td><code>ERR_NOT_FOUND</code></td><td>No such book</td><td>Show &quot;not found&quot;</td></tr>
+<tr><td><code>ERR_OUT_OF_STOCK</code></td><td>All copies are issued</td><td>Offer a reservation</td></tr>
+<tr><td><code>ERR_LIMIT</code>, <code>ERR_DUPLICATE</code>, <code>ERR_MEMBER</code></td><td>Business rule: 3 books maximum, same book twice, inactive member</td><td>Show the reason</td></tr>
+<tr><td><code>ERR_INTERNAL</code> (faultcode <code>Server</code>)</td><td>Database or other unexpected failure (transaction rolled back)</td><td>Retry later</td></tr>
+</tbody></table></div>
+<h2>D. How a client consumes the service</h2>
+<ol>
+<li><strong>Obtain the WSDL</strong> from <code>http://host/server.php?wsdl</code>.</li>
+<li><strong>Create the client:</strong> in PHP <code>new SoapClient($wsdl, [...])</code> (the WSDL lets it expose each operation as a method); in Java run <code>wsimport -keep -p library.client http://host/library?wsdl</code> to generate stub classes and use the generated <code>LibraryService</code> port.</li>
+<li><strong>Build the request:</strong> pass an array/object whose fields match the schema (for example <code>[&#x27;keyword&#x27; =&gt; &#x27;program&#x27;]</code>); the client turns it into the SOAP envelope and adds the API-key header.</li>
+<li><strong>Call the operation</strong> like a normal method; the client sends the HTTP POST.</li>
+<li><strong>Process the response:</strong> the XML reply is converted back to objects (<code>$found-&gt;book</code>). A single result arrives as one object, not a list, so the code wraps it into an array.</li>
+<li><strong>Handle faults:</strong> wrap calls in <code>try/catch (SoapFault)</code> and act on the error code.</li>
+</ol>
+<figure><div class="label">client.php (build request -&gt; call -&gt; process response)</div><pre><code>try {
+    // 1. build request -&gt; call operation -&gt; process response
+    $found = $client-&gt;searchBook([&#x27;keyword&#x27; =&gt; $argv[1] ?? &#x27;program&#x27;]);
+    foreach (toList($found-&gt;book ?? null) as $b) {
+        printf(&quot;#%d %-32s %-24s %s\n&quot;, $b-&gt;id, $b-&gt;title, $b-&gt;author, $b-&gt;available ? &#x27;available&#x27; : &#x27;ALL ISSUED&#x27;);
+    }
+    $d = $client-&gt;getBookDetails([&#x27;bookId&#x27; =&gt; 1]);
+    printf(&quot;Details: %s - %d of %d copies available\n&quot;, $d-&gt;title, $d-&gt;availableCopies, $d-&gt;totalCopies);
+
+    $loan = $client-&gt;issueBook([&#x27;bookId&#x27; =&gt; 1, &#x27;memberId&#x27; =&gt; 1]);
+    printf(&quot;Issued: loan #%d, due %s\n&quot;, $loan-&gt;loanId, $loan-&gt;dueDate);</code></pre></figure>
+<figure><div class="label">Output from the running service</div><pre><code>$ php client.php program
+#1 Internet Programming Basics      R. Kumar                 available
+#2 The C Programming Language       Kernighan and Ritchie    available
+Details: Internet Programming Basics - 2 of 2 copies available
+Issued: loan #1, due 2026-12-06
+
+$ php client.php program        (second run, same member)
+SOAP FAULT [SOAP-ENV:Client]: ERR_DUPLICATE: Member already has this book
+
+$ LIB_KEY=public-key-123 php client.php program
+SOAP FAULT [SOAP-ENV:Client]: ERR_FORBIDDEN: This API key may not perform this operation</code></pre></figure>
+<h2>E. Evaluation of the design</h2>
+<div class="tw"><table><thead><tr><th>Aspect</th><th>How the design handles it</th><th>Evidence / remaining risk</th></tr></thead><tbody>
+<tr><td>SQL injection</td><td>Prepared statements with bound parameters everywhere; LIKE wildcards in the keyword are escaped so <code>%</code> and <code>_</code> are literal; IDs are validated as positive integers with <code>filter_var</code>; <code>EMULATE_PREPARES</code> is off so the database server prepares the statement; the DB account should have only SELECT/INSERT and column-limited UPDATE rights</td><td>Tested: searching <code>&#x27; OR 1=1 --</code> and <code>%%</code> returned no books (treated as plain text). Risk: any future query built by string concatenation would break this protection, so code review must forbid it</td></tr>
+<tr><td>Concurrent issue requests</td><td>Atomic conditional UPDATE inside a transaction; member row lock (<code>FOR UPDATE</code>) in MySQL; a database CHECK constraint on the stock columns as a last defence; busy-timeout so waiting requests retry instead of failing</td><td>Tested: 6 simultaneous requests for a book with 2 copies gave exactly <strong>2 loans</strong> and 4 <code>ERR_OUT_OF_STOCK</code> faults. Risk: the demo used SQLite; under heavy MySQL load deadlocks are possible and the client should retry once on <code>ERR_INTERNAL</code></td></tr>
+<tr><td>Authentication and authorisation</td><td>API key checked (stored as SHA-256 hash) before any SOAP processing; two roles: *public* (read) and *desk* (issue); per-operation permission check; request size limit; DTDs refused</td><td>Tested: no key gives 401; read-only key gets <code>ERR_FORBIDDEN</code>. Risk: shared static keys; production should use WS-Security or OAuth tokens per user with TLS, key rotation and rate limiting</td></tr>
+<tr><td>Error handling</td><td>Business errors become typed <code>Client</code> faults after a rollback; unexpected errors are logged and returned as a generic <code>Server</code> fault; no SQL, stack trace or table names are sent to clients</td><td>Tested for each fault code. Risk: SOAP faults return HTTP 500, so monitoring must read the fault, not only the status code</td></tr>
+<tr><td>Other</td><td>Pagination limit of 25 rows; input length limits; WSDL published from a file so the contract is stable</td><td>Add audit logging of who issued which book, and return/renew operations</td></tr>
+</tbody></table></div>
+<h2>F. When a REST service would be preferred to SOAP</h2>
+<div class="tw"><table><thead><tr><th>Choose REST when</th><th>Choose SOAP when</th></tr></thead><tbody>
+<tr><td>Clients are web or mobile apps and browsers (JSON, lightweight)</td><td>Clients are enterprise or legacy systems that expect a WSDL contract and generated stubs</td></tr>
+<tr><td>Mostly simple CRUD on resources (books, members, loans) such as <code>GET /books?q=...</code>, <code>POST /loans</code></td><td>A strict contract, standard faults and formal typing are required</td></tr>
+<tr><td>Responses should be cached (catalogue search) and bandwidth matters</td><td>WS-Security (message-level signing/encryption), WS-ReliableMessaging or WS-AtomicTransaction are needed</td></tr>
+<tr><td>Many third-party developers need an easy API</td><td>Operations are action-oriented and the partner already uses SOAP tooling</td></tr>
+</tbody></table></div>
+<p><strong>Verdict.</strong> For a library catalogue that students&#x27; mobile apps and the college website will use, REST is the better public interface. The SOAP service is appropriate where partner systems (for example another library network or the university ERP) already consume WSDL. The design shown keeps the important protections (prepared statements, atomic stock update, role-based keys, safe faults) independent of the protocol, so the same core could later be exposed through REST as well.</p>
+
+<nav><a href="a5_q2_wsdl_testing.html">&larr; Question 2</a><a href="a5_q4_websocket_5g_edge.html">Question 4 &rarr;</a></nav>
+</main></body></html>
